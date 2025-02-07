@@ -1,18 +1,33 @@
-import image from '$assets/electrovite.png';
+import { useState } from 'react';
+import Login from './Login';
+import Phone from './Phone';
 
 const App = () => {
+  const [credentials, setCredentials] = useState<null | {
+    username: string;
+    password: string;
+    server: string;
+  }>(null);
+
+  const handleLogin = (creds: {
+    username: string;
+    password: string;
+    server: string;
+  }) => {
+    setCredentials(creds);
+  };
+
+  const handleLogout = () => {
+    setCredentials(null);
+  };
+
   return (
-    <div>
-      <div className='icon'>
-        <img src={image} />
-      </div>
-      <h1>ElectroVite</h1>
-      <p className='teaser'>
-        A preconfigured project for creating robust desktop apps with ReactJS.
-      </p>
-      <p className='teaser light'>
-        Edit <span>App.tsx</span> to create a wonderful application.
-      </p>
+    <div className='app'>
+      {credentials ? (
+        <Phone credentials={credentials} onLogout={handleLogout} />
+      ) : (
+        <Login onLogin={handleLogin} />
+      )}
     </div>
   );
 };
