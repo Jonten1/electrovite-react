@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Login from './Login';
 import Phone from './Phone';
 
@@ -8,6 +8,13 @@ const App = () => {
     password: string;
     server: string;
   }>(null);
+
+  useEffect(() => {
+    fetch('http://localhost:5000/numbers')
+      .then((res) => res.json())
+      .then((data) => console.log(data))
+      .catch((error) => console.error('Error fetching numbers:', error));
+  }, []);
 
   const handleLogin = (creds: {
     username: string;

@@ -15,35 +15,75 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [number, setNumber] = useState('');
   const [status, setStatus] = useState('Connecting...');
   const [isInCall, setIsInCall] = useState(false);
+  const [isIncoming, setIsIncoming] = useState(false);
+  const [callerNumber, setCallerNumber] = useState('');
 
   useEffect(() => {
     const initializeSIP = async () => {
       try {
-        const uri = `sip:${credentials.username}@${credentials.server}`;
-        const wsServer = `wss://${credentials.server}:443/ws`;
+        console.log('Credentials:', credentials); // Debug log
 
-        const simpleUser = new Web.SimpleUser(wsServer, {
-          aor: uri,
-          userAgentOptions: {
-            authorizationUsername: credentials.username,
-            authorizationPassword: credentials.password,
-            displayName: credentials.username,
-            uri: new URI(uri),
+        const [username] = credentials.username.split('@');
+
+        const sipUri = UserAgent.makeURI(
+          `sip:${username}@${credentials.server}`,
+        );
+
+        if (!sipUri) {
+          throw new Error('Failed to create SIP URI');
+        }
+
+        const simpleUser = new Web.SimpleUser(
+          `wss://${credentials.server}/w1/websocket`,
+          {
+            aor: sipUri.toString(),
+            media: {
+              constraints: { audio: true, video: false },
+              // Add ICE servers for WebRTC
+              iceServers: [
+                {
+                  urls: ['stun:stun.46elks.com:3478'],
+                },
+              ],
+              // Enable PSTN interop
+              rtcConfiguration: {
+                iceTransportPolicy: 'all',
+                bundlePolicy: 'balanced',
+              },
+            },
+            userAgentOptions: {
+              authorizationUsername: username,
+              authorizationPassword: credentials.password,
+              displayName: username,
+              uri: sipUri,
+              // Add transport options
+              transportOptions: {
+                wsServers: [`wss://${credentials.server}/w1/websocket`],
+                traceSip: true, // For debugging
+              },
+            },
           },
-        });
+        );
 
         await simpleUser.connect();
         await simpleUser.register();
         setUserAgent(simpleUser);
         setStatus('Ready');
 
-        // Handle incoming calls
+        // Log registration state changes
         simpleUser.delegate = {
-          onCallReceived: async () => {
+          onCallReceived: async (session) => {
+            console.log('Incoming call session:', session); // Debug log
+            setIsIncoming(true);
             setIsInCall(true);
-            setStatus('Incoming call...');
-            // Auto answer for testing - remove in production
-            await simpleUser.answer();
+            // Handle both SIP and PSTN numbers
+            const incomingNumber = session.remoteIdentity.uri.user || 'Unknown';
+            setCallerNumber(
+              incomingNumber.startsWith('+')
+                ? incomingNumber
+                : `+${incomingNumber}`,
+            );
+            setStatus(`Incoming call from ${incomingNumber}`);
           },
           onCallHangup: () => {
             setIsInCall(false);
@@ -101,6 +141,30 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     }
   };
 
+  const handleAnswer = async () => {
+    if (!userAgent) return;
+    try {
+      await userAgent.answer();
+      setIsIncoming(false);
+      setStatus('In call');
+    } catch (error) {
+      console.error('Answer error:', error);
+      setStatus('Failed to answer');
+    }
+  };
+
+  const handleReject = async () => {
+    if (!userAgent) return;
+    try {
+      await userAgent.reject();
+      setIsIncoming(false);
+      setIsInCall(false);
+      setStatus('Ready');
+    } catch (error) {
+      console.error('Reject error:', error);
+    }
+  };
+
   return (
     <div className='phone-container'>
       <div className='status-bar'>
@@ -109,22 +173,37 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       </div>
 
       <div className='dialer'>
-        <input
-          type='tel'
-          value={number}
-          onChange={(e) => setNumber(e.target.value)}
-          placeholder='Enter phone number'
-          disabled={isInCall}
-        />
-
-        {isInCall ? (
-          <button className='hangup' onClick={handleHangup}>
-            Hang up
-          </button>
+        {isIncoming ? (
+          <div className='incoming-call'>
+            <p>Incoming call from {callerNumber}</p>
+            <div className='call-actions'>
+              <button className='answer' onClick={handleAnswer}>
+                Answer
+              </button>
+              <button className='reject' onClick={handleReject}>
+                Reject
+              </button>
+            </div>
+          </div>
         ) : (
-          <button className='call' onClick={handleCall} disabled={!number}>
-            Call
-          </button>
+          <>
+            <input
+              type='tel'
+              value={number}
+              onChange={(e) => setNumber(e.target.value)}
+              placeholder='Enter phone number'
+              disabled={isInCall}
+            />
+            {isInCall ? (
+              <button className='hangup' onClick={handleHangup}>
+                Hang up
+              </button>
+            ) : (
+              <button className='call' onClick={handleCall} disabled={!number}>
+                Call
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
