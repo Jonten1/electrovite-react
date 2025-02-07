@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { UserAgent, Web, URI } from 'sip.js';
+import { UserAgent, Web } from 'sip.js';
+import '../styles/phone.scss';
+import CallInfo from './CallInfo';
 
 interface PhoneProps {
   credentials: {
@@ -17,6 +19,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [isInCall, setIsInCall] = useState(false);
   const [isIncoming, setIsIncoming] = useState(false);
   const [callerNumber, setCallerNumber] = useState('');
+  const [callStartTime, setCallStartTime] = useState<Date | null>(null);
 
   useEffect(() => {
     const initializeSIP = async () => {
@@ -72,22 +75,44 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
         // Log registration state changes
         simpleUser.delegate = {
-          onCallReceived: async (session) => {
-            console.log('Incoming call session:', session); // Debug log
+          onCallReceived: async (invitation: any) => {
+            console.log('Full invitation:', invitation);
+
+            // Get the From header from the incoming INVITE message
+            const fromUri =
+              invitation?.incomingInviteRequest?.message?.from?.uri?.raw;
+            console.log('From URI:', fromUri);
+
+            // Try different paths to get the number
+            let phoneNumber = 'Unknown';
+
+            if (invitation?.incomingInviteRequest?.message?.from?.uri?.user) {
+              phoneNumber =
+                invitation.incomingInviteRequest.message.from.uri.user;
+            } else if (invitation?.request?.from?.uri?.user) {
+              phoneNumber = invitation.request.from.uri.user;
+            } else if (
+              invitation?.message?.headers?.From?.[0]?.parsed?.uri?.user
+            ) {
+              phoneNumber = invitation.message.headers.From[0].parsed.uri.user;
+            }
+
+            console.log('Extracted phone:', phoneNumber);
+
             setIsIncoming(true);
             setIsInCall(true);
-            // Handle both SIP and PSTN numbers
-            const incomingNumber = session.remoteIdentity.uri.user || 'Unknown';
-            setCallerNumber(
-              incomingNumber.startsWith('+')
-                ? incomingNumber
-                : `+${incomingNumber}`,
-            );
-            setStatus(`Incoming call from ${incomingNumber}`);
+
+            // Format the number (remove + if present)
+            const formattedNumber = phoneNumber.replace(/^\+/, '');
+
+            setCallerNumber(formattedNumber);
+            setStatus(`Incoming call from ${formattedNumber}`);
+            setCallStartTime(null);
           },
           onCallHangup: () => {
             setIsInCall(false);
             setStatus('Ready');
+            setCallStartTime(null);
           },
           onRegistered: () => {
             setStatus('Registered');
@@ -119,11 +144,26 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   }, [credentials]);
 
   const handleCall = async () => {
-    if (!userAgent || !number) return;
+    if (!number) return;
     try {
-      await userAgent.call(`sip:${number}@${credentials.server}`);
+      const response = await fetch('http://localhost:5000/make-call', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: number,
+          webrtcNumber: credentials.username.split('@')[0], // This gets the '4600120060' part
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to initiate call');
+      }
+
       setIsInCall(true);
       setStatus('Calling...');
+      setCallStartTime(new Date());
     } catch (error) {
       console.error('Call error:', error);
       setStatus('Call failed');
@@ -147,6 +187,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       await userAgent.answer();
       setIsIncoming(false);
       setStatus('In call');
+      setCallStartTime(new Date());
     } catch (error) {
       console.error('Answer error:', error);
       setStatus('Failed to answer');
@@ -173,6 +214,21 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       </div>
 
       <div className='dialer'>
+        {isInCall && (
+          <>
+            {console.log('Rendering CallInfo with:', {
+              // Debug render
+              callerNumber,
+              isIncoming,
+              number,
+              startTime: callStartTime,
+            })}
+            <CallInfo
+              callerNumber={isIncoming ? callerNumber : number}
+              startTime={callStartTime}
+            />
+          </>
+        )}
         {isIncoming ? (
           <div className='incoming-call'>
             <p>Incoming call from {callerNumber}</p>
@@ -194,15 +250,21 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
               placeholder='Enter phone number'
               disabled={isInCall}
             />
-            {isInCall ? (
-              <button className='hangup' onClick={handleHangup}>
-                Hang up
-              </button>
-            ) : (
-              <button className='call' onClick={handleCall} disabled={!number}>
-                Call
-              </button>
-            )}
+            <div className='call-actions'>
+              {isInCall ? (
+                <button className='hangup' onClick={handleHangup}>
+                  Hang up
+                </button>
+              ) : (
+                <button
+                  className='call'
+                  onClick={handleCall}
+                  disabled={!number}
+                >
+                  Call
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>

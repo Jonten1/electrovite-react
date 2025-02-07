@@ -10,32 +10,78 @@ const App = () => {
   }>(null);
 
   useEffect(() => {
-    fetch('http://localhost:5000/numbers')
-      .then((res) => res.json())
-      .then((data) => console.log(data))
-      .catch((error) => console.error('Error fetching numbers:', error));
+    const savedCredentials = localStorage.getItem('credentials');
+    if (savedCredentials) {
+      const creds = JSON.parse(savedCredentials);
+      // Make login request to backend with saved credentials
+      fetch('http://localhost:5000/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: creds.username,
+          password: creds.password,
+        }),
+        credentials: 'include', // Important for session cookie
+      })
+        .then((res) => {
+          if (res.ok) {
+            setCredentials(creds);
+          } else {
+            localStorage.removeItem('credentials');
+          }
+        })
+        .catch((error) => {
+          console.error('Login error:', error);
+          localStorage.removeItem('credentials');
+        });
+    }
   }, []);
 
-  const handleLogin = (creds: {
+  const handleLogin = async (creds: {
     username: string;
     password: string;
     server: string;
   }) => {
-    setCredentials(creds);
+    try {
+      const response = await fetch('http://localhost:5000/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: creds.username,
+          password: creds.password,
+        }),
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        localStorage.setItem('credentials', JSON.stringify(creds));
+        setCredentials(creds);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+    }
   };
 
-  const handleLogout = () => {
-    setCredentials(null);
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:5000/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } finally {
+      localStorage.removeItem('credentials');
+      setCredentials(null);
+    }
   };
 
-  return (
-    <div className='app'>
-      {credentials ? (
-        <Phone credentials={credentials} onLogout={handleLogout} />
-      ) : (
-        <Login onLogin={handleLogin} />
-      )}
-    </div>
+  return credentials ? (
+    <Phone credentials={credentials} onLogout={handleLogout} />
+  ) : (
+    <Login onLogin={handleLogin} />
   );
 };
 

@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { WebSocketServer } from 'ws';
 import http from 'http';
+import session from 'express-session';
 
 dotenv.config();
 
@@ -47,12 +48,43 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    },
+  }),
+);
+
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
   next();
 });
 
-app.get('/numbers', async (req, res) => {
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (username && password) {
+    req.session.user = { username };
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
+const authenticate = (req, res, next) => {
+  if (req.session.user) {
+    next();
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+};
+
+app.get('/numbers', authenticate, async (req, res) => {
   try {
     if (!elksUsername || !elksPassword) {
       throw new Error('46elks API credentials not configured');
@@ -73,6 +105,51 @@ app.get('/numbers', async (req, res) => {
     console.error('Error fetching numbers:', error);
     res.status(500).json({ message: 'Error fetching numbers' });
   }
+});
+
+app.post('/make-call', authenticate, async (req, res) => {
+  try {
+    const { phoneNumber, webrtcNumber } = req.body;
+    const virtualNumber = process.env.ELKS_NUMBER;
+
+    const authKey = Buffer.from(`${elksUsername}:${elksPassword}`).toString(
+      'base64',
+    );
+    const url = 'https://api.46elks.com/a1/calls';
+
+    // First call the WebRTC number, then connect to the target number
+    const data = new URLSearchParams({
+      from: virtualNumber,
+      to: `+${webrtcNumber}`, // Call our WebRTC client first
+      voice_start: JSON.stringify({
+        connect: `+${phoneNumber}`, // Then connect to the target number
+      }),
+    }).toString();
+
+    const config = {
+      headers: {
+        Authorization: `Basic ${authKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    };
+
+    const response = await axios.post(url, data, config);
+    console.log('Outgoing call initiated:', response.data);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error making outgoing call:', error);
+    res.status(500).json({ error: 'Failed to make call' });
+  }
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      res.status(500).json({ error: 'Failed to logout' });
+    } else {
+      res.json({ success: true });
+    }
+  });
 });
 
 app.listen(PORT, () => {
