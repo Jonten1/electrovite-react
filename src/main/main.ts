@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification } from 'electron';
 import path from 'path';
 
 /** Handle creating/removing shortcuts on Windows when installing/uninstalling. */
@@ -35,7 +35,12 @@ app.on('activate', () => {
     createMainWindow();
   }
 });
+app.on('ready', () => {
+  // Set the AppUserModelId
+  app.setAppUserModelId('SkyPhone');
 
+  createMainWindow();
+});
 /**
  * Emitted when all windows have been closed.
  */
@@ -99,3 +104,53 @@ function createMainWindow() {
  * In this file you can include the rest of your app's specific main process code.
  * You can also put them in separate files and import them here.
  */
+
+ipcMain.on('focus-window', () => {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+});
+
+let activeNotification: Notification | null = null;
+
+ipcMain.on('show-notification', (event, { title, body }) => {
+  if (activeNotification) {
+    activeNotification.close();
+  }
+
+  activeNotification = new Notification({
+    icon: path.resolve('assets/favicon.ico'),
+    title,
+    body,
+    timeoutType: 'never',
+  });
+
+  activeNotification.show();
+
+  activeNotification.on('click', () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+});
+
+ipcMain.on('close-notification', () => {
+  if (activeNotification) {
+    activeNotification.close();
+    activeNotification = null;
+  }
+});
+
+// Make sure notifications are allowed
+app.whenReady().then(() => {
+  // Request permission for notifications
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
+  // ... rest of your app initialization
+});

@@ -107,10 +107,12 @@ app.get('/numbers', authenticate, async (req, res) => {
   }
 });
 
-app.post('/make-call', authenticate, async (req, res) => {
+app.post('/make-call', async (req, res) => {
   try {
     const { phoneNumber, webrtcNumber } = req.body;
     const virtualNumber = process.env.ELKS_NUMBER;
+    console.log('elksUsername', elksUsername);
+    console.log('elksPassword', elksPassword);
 
     const authKey = Buffer.from(`${elksUsername}:${elksPassword}`).toString(
       'base64',

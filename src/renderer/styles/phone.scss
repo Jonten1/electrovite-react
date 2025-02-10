@@ -3,145 +3,147 @@
   flex-direction: column;
   height: 100vh;
   background: #f8fafc;
+  max-width: 400px;
+  margin: 0 auto;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
 }
 
 .status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  background: #2c3e50;
+  color: white;
 
   span {
     font-weight: 500;
-    color: #4a5568;
   }
 
   button {
     padding: 0.5rem 1rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 6px;
     background: transparent;
-    color: #718096;
+    color: white;
     cursor: pointer;
     transition: all 0.2s;
 
     &:hover {
-      background: #f7fafc;
-      color: #4a5568;
+      background: rgba(255, 255, 255, 0.1);
     }
   }
 }
 
-.dialer {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.call-info {
+  background: white;
+  border-radius: 12px;
   padding: 2rem;
-  gap: 1.5rem;
-  max-width: 400px;
-  margin: 0 auto;
-  width: 100%;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin: 2rem;
 
-  input {
-    width: 100%;
-    padding: 1rem;
+  .caller-id {
+    font-size: 1.75rem;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+  }
+
+  .timer {
     font-size: 1.5rem;
-    text-align: center;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
-    background: white;
-    transition: all 0.2s;
-
-    &:focus {
-      outline: none;
-      border-color: #4a90e2;
-      box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
-    }
-
-    &:disabled {
-      background: #f7fafc;
-      cursor: not-allowed;
-    }
+    color: #666;
   }
 
   .call-actions {
-    display: flex;
-    gap: 1rem;
-    width: 100%;
-  }
+    margin-top: 2rem;
 
-  button {
-    width: 100%;
-    padding: 1rem;
-    border: none;
-    border-radius: 12px;
-    font-size: 1.1rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-
-    &.call {
-      background: #48bb78;
+    button {
+      padding: 1rem 2rem;
+      border: none;
+      border-radius: 50px;
+      font-size: 1.2rem;
+      background: #f44336;
       color: white;
+      cursor: pointer;
+      transition: all 0.2s;
 
       &:hover {
-        background: #38a169;
-      }
-
-      &:disabled {
-        background: #9ae6b4;
-        cursor: not-allowed;
-      }
-    }
-
-    &.hangup {
-      background: #f56565;
-      color: white;
-
-      &:hover {
-        background: #e53e3e;
+        transform: scale(1.05);
+        background: #d32f2f;
       }
     }
   }
 }
 
 .incoming-call {
-  width: 100%;
   text-align: center;
   padding: 2rem;
+  margin: 2rem;
   background: white;
   border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 
   p {
-    font-size: 1.25rem;
-    color: #2d3748;
+    font-size: 1.5rem;
+    color: #2c3e50;
     margin-bottom: 2rem;
   }
 
   .call-actions {
-    display: flex;
-    gap: 1rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    padding: 0 2rem;
 
-    .answer {
-      background: #48bb78;
-      color: white;
+    button {
+      padding: 1rem;
+      border: none;
+      border-radius: 50%;
+      aspect-ratio: 1;
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 
-      &:hover {
-        background: #38a169;
+      &.answer {
+        background: #4caf50;
+        color: white;
+
+        &:hover {
+          background: #388e3c;
+          transform: scale(1.05);
+        }
+      }
+
+      &.reject {
+        background: #f44336;
+        color: white;
+
+        &:hover {
+          background: #d32f2f;
+          transform: scale(1.05);
+        }
       }
     }
+  }
+}
 
-    .reject {
-      background: #f56565;
-      color: white;
+.ready-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  color: #64748b;
 
-      &:hover {
-        background: #e53e3e;
-      }
-    }
+  p {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+  }
+
+  .status {
+    font-size: 1rem;
+    color: #94a3b8;
   }
 }

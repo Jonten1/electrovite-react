@@ -12,6 +12,17 @@ interface PhoneProps {
   onLogout: () => void;
 }
 
+declare global {
+  interface Window {
+    electron: {
+      Notification: {
+        create: (title: string, options: NotificationOptions) => Notification;
+      };
+      focusWindow: () => void;
+    };
+  }
+}
+
 const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [userAgent, setUserAgent] = useState<Web.SimpleUser | null>(null);
   const [number, setNumber] = useState('');
@@ -75,41 +86,28 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
         // Log registration state changes
         simpleUser.delegate = {
-          onCallReceived: async (invitation: any) => {
-            console.log('Full invitation:', invitation);
-
-            // Get the From header from the incoming INVITE message
-            const fromUri =
-              invitation?.incomingInviteRequest?.message?.from?.uri?.raw;
-            console.log('From URI:', fromUri);
-
-            // Try different paths to get the number
-            let phoneNumber = 'Unknown';
-
-            if (invitation?.incomingInviteRequest?.message?.from?.uri?.user) {
-              phoneNumber =
-                invitation.incomingInviteRequest.message.from.uri.user;
-            } else if (invitation?.request?.from?.uri?.user) {
-              phoneNumber = invitation.request.from.uri.user;
-            } else if (
-              invitation?.message?.headers?.From?.[0]?.parsed?.uri?.user
-            ) {
-              phoneNumber = invitation.message.headers.From[0].parsed.uri.user;
-            }
-
-            console.log('Extracted phone:', phoneNumber);
-
-            setIsIncoming(true);
-            setIsInCall(true);
+          onCallReceived: async () => {
+            // Log the session information
 
             // Format the number (remove + if present)
-            const formattedNumber = phoneNumber.replace(/^\+/, '');
+            const formattedNumber =
+              simpleUser.session.dialog.initialTransaction.request.from.uri
+                .normal.user;
 
+            // Create system notification using the exposed API
+            window.electron.Notification.create(
+              'Incoming Call',
+              `From ${formattedNumber}`,
+            );
+            setIsIncoming(true);
+            setIsInCall(true);
             setCallerNumber(formattedNumber);
             setStatus(`Incoming call from ${formattedNumber}`);
             setCallStartTime(null);
           },
           onCallHangup: () => {
+            window.electron.Notification.close();
+            setIsIncoming(false);
             setIsInCall(false);
             setStatus('Ready');
             setCallStartTime(null);
@@ -185,6 +183,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     if (!userAgent) return;
     try {
       await userAgent.answer();
+      window.electron.Notification.close();
       setIsIncoming(false);
       setStatus('In call');
       setCallStartTime(new Date());
@@ -197,13 +196,17 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const handleReject = async () => {
     if (!userAgent) return;
     try {
-      await userAgent.reject();
+      await userAgent.hangup();
       setIsIncoming(false);
       setIsInCall(false);
       setStatus('Ready');
     } catch (error) {
       console.error('Reject error:', error);
     }
+  };
+
+  const handleKeyPress = (key: string) => {
+    setNumber((prev) => prev + key);
   };
 
   return (
@@ -213,61 +216,28 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         <button onClick={onLogout}>Logout</button>
       </div>
 
-      <div className='dialer'>
-        {isInCall && (
-          <>
-            {console.log('Rendering CallInfo with:', {
-              // Debug render
-              callerNumber,
-              isIncoming,
-              number,
-              startTime: callStartTime,
-            })}
-            <CallInfo
-              callerNumber={isIncoming ? callerNumber : number}
-              startTime={callStartTime}
-            />
-          </>
-        )}
-        {isIncoming ? (
-          <div className='incoming-call'>
-            <p>Incoming call from {callerNumber}</p>
-            <div className='call-actions'>
-              <button className='answer' onClick={handleAnswer}>
-                Answer
-              </button>
-              <button className='reject' onClick={handleReject}>
-                Reject
-              </button>
-            </div>
+      {isIncoming ? (
+        <div className='incoming-call'>
+          <p>Incoming call from {callerNumber}</p>
+          <div className='call-actions'>
+            <button className='answer' onClick={handleAnswer}>
+              <i className='fas fa-phone'></i>
+            </button>
+            <button className='reject' onClick={handleReject}>
+              <i className='fas fa-phone-slash'></i>
+            </button>
           </div>
-        ) : (
-          <>
-            <input
-              type='tel'
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-              placeholder='Enter phone number'
-              disabled={isInCall}
-            />
-            <div className='call-actions'>
-              {isInCall ? (
-                <button className='hangup' onClick={handleHangup}>
-                  Hang up
-                </button>
-              ) : (
-                <button
-                  className='call'
-                  onClick={handleCall}
-                  disabled={!number}
-                >
-                  Call
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+        </div>
+      ) : isInCall ? (
+        <CallInfo callerNumber={callerNumber} startTime={callStartTime} />
+      ) : (
+        <div className='ready-state'>
+          <div>
+            <p>Ready to receive calls</p>
+            <div className='status'>{status}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
