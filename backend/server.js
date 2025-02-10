@@ -154,6 +154,24 @@ app.post('/logout', (req, res) => {
   });
 });
 
+const activeUsers = new Map(); // Store active users and their last heartbeat
+
+app.post('/heartbeat', (req, res) => {
+  const { username } = req.body;
+  activeUsers.set(username, Date.now());
+
+  // Clean up inactive users (no heartbeat for more than 30 seconds)
+  for (const [user, lastBeat] of activeUsers.entries()) {
+    if (Date.now() - lastBeat > 30000) {
+      activeUsers.delete(user);
+    }
+  }
+
+  // Return list of active users
+  const activeUsersList = Array.from(activeUsers.keys());
+  res.json({ activeUsers: activeUsersList });
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

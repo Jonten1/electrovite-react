@@ -14,4 +14,7 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.send('close-notification');
     }
   },
+  SIP: {
+    getStatus: (credentials: any) => ipcRenderer.invoke('get-sip-status', credentials)
+  }
 });

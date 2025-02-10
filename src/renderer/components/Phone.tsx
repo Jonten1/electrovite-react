@@ -19,6 +19,9 @@ declare global {
         create: (title: string, options: NotificationOptions) => Notification;
       };
       focusWindow: () => void;
+      SIP: {
+        getStatus: (credentials: any) => Promise<any>;
+      };
     };
   }
 }
@@ -139,6 +142,36 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         userAgent.disconnect();
       }
     };
+  }, [credentials]);
+
+  useEffect(() => {
+    const sendHeartbeat = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/heartbeat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: credentials.username,
+          }),
+        });
+
+        const data = await response.json();
+        console.log('Active users:', data.activeUsers);
+        // You can update UI with active users here
+      } catch (error) {
+        console.error('Heartbeat error:', error);
+      }
+    };
+
+    // Send heartbeat every 10 seconds
+    const heartbeatInterval = setInterval(sendHeartbeat, 10000);
+
+    // Initial heartbeat
+    sendHeartbeat();
+
+    return () => clearInterval(heartbeatInterval);
   }, [credentials]);
 
   const handleCall = async () => {

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, Notification } from 'electron';
 import path from 'path';
+import axios from 'axios';
 
 /** Handle creating/removing shortcuts on Windows when installing/uninstalling. */
 if (require('electron-squirrel-startup')) {
@@ -153,4 +154,24 @@ app.whenReady().then(() => {
   }
 
   // ... rest of your app initialization
+});
+
+// Add this IPC handler
+ipcMain.handle('get-sip-status', async (event, credentials) => {
+  try {
+    const authKey = Buffer.from(
+      `u0350c47b9ce438d299ddfc1762488036:71D873DF52A30ADE550D807C607AA47C`
+    ).toString('base64');
+
+    const response = await axios.get('https://api.46elks.com/a1/sipmonitor', {
+      headers: {
+        Authorization: `Basic ${authKey}`,
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching SIP status:', error);
+    throw error;
+  }
 });
