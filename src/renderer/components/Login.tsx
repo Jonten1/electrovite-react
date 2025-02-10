@@ -10,8 +10,8 @@ interface LoginProps {
 }
 
 const Login = ({ onLogin }: LoginProps) => {
-  const [username, setUsername] = useState('4600120060');
-  const [password, setPassword] = useState('9660A96589A18CC4ED49C5DA63A6C669');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [server] = useState('voip.46elks.com');
 
   const handleSubmit = (e: React.FormEvent) => {
