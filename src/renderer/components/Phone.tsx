@@ -211,11 +211,6 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
   return (
     <div className='phone-container'>
-      <div className='status-bar'>
-        <span>{status}</span>
-        <button onClick={onLogout}>Logout</button>
-      </div>
-
       {isIncoming ? (
         <div className='incoming-call'>
           <p>Incoming call from {callerNumber}</p>

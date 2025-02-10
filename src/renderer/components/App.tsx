@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Login from './Login';
 import Phone from './Phone';
+import StatusBar from './StatusBar';
 
 const App = () => {
   const [credentials, setCredentials] = useState<null | {
@@ -79,7 +80,10 @@ const App = () => {
   };
 
   return credentials ? (
-    <Phone credentials={credentials} onLogout={handleLogout} />
+    <>
+      <StatusBar status={credentials.username} onLogout={handleLogout} />
+      <Phone credentials={credentials} onLogout={handleLogout} />
+    </>
   ) : (
     <Login onLogin={handleLogin} />
   );
