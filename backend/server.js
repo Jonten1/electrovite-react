@@ -23,6 +23,7 @@ const corsOptions = {
     'http://localhost:3001',
     'http://localhost:5000',
     'http://localhost:5173', // Your frontend URL
+    'http://localhost:5174',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [

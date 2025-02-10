@@ -3,10 +3,19 @@ import { useState, useEffect } from 'react';
 interface CallInfoProps {
   callerNumber: string;
   startTime: Date | null;
+  onTransfer: (targetExtension: string) => void;
+  onlineUsers: string[];
 }
 
-const CallInfo = ({ callerNumber, startTime }: CallInfoProps) => {
+const CallInfo = ({
+  callerNumber,
+  startTime,
+  onTransfer,
+  onlineUsers = [],
+}: CallInfoProps) => {
   const [elapsedTime, setElapsedTime] = useState('00:00');
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [selectedUser, setSelectedUser] = useState('');
 
   console.log('CallInfo props:', { callerNumber, startTime }); // Debug props
 
@@ -28,6 +37,14 @@ const CallInfo = ({ callerNumber, startTime }: CallInfoProps) => {
     return () => clearInterval(timer);
   }, [startTime]);
 
+  const handleTransferClick = () => {
+    if (selectedUser) {
+      onTransfer(selectedUser.split('@')[0]);
+      setShowTransfer(false);
+      setSelectedUser('');
+    }
+  };
+
   return (
     <div className='call-info'>
       <div className='caller-id'>
@@ -37,6 +54,30 @@ const CallInfo = ({ callerNumber, startTime }: CallInfoProps) => {
       <div className='timer'>
         <span className='label'>Duration:</span>
         <span className='time'>{elapsedTime}</span>
+      </div>
+      <div className='transfer-controls'>
+        <button onClick={() => setShowTransfer(!showTransfer)}>
+          Transfer Call
+        </button>
+
+        {showTransfer && (
+          <div className='transfer-dropdown'>
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+            >
+              <option value=''>Select user...</option>
+              {onlineUsers.map((user) => (
+                <option key={user} value={user}>
+                  {user.split('@')[0]}
+                </option>
+              ))}
+            </select>
+            <button onClick={handleTransferClick} disabled={!selectedUser}>
+              Transfer
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

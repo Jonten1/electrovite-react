@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { UserAgent, Web } from 'sip.js';
 import '../styles/phone.scss';
 import CallInfo from './CallInfo';
+import OnlineUsers from './OnlineUsers';
 
 interface PhoneProps {
   credentials: {
@@ -34,6 +35,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [isIncoming, setIsIncoming] = useState(false);
   const [callerNumber, setCallerNumber] = useState('');
   const [callStartTime, setCallStartTime] = useState<Date | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   useEffect(() => {
     const initializeSIP = async () => {
@@ -127,6 +129,28 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           onServerDisconnect: () => {
             setStatus('Disconnected from server');
           },
+          onRefer: async (referral) => {
+            try {
+              setStatus('Receiving transfer...');
+              await referral.accept();
+              setIsInCall(true);
+              setCallStartTime(new Date());
+
+              // Get the transferred number
+              const transferredNumber = referral.referTo?.normal?.user;
+              if (transferredNumber) {
+                setCallerNumber(transferredNumber);
+              }
+
+              setStatus('Call transferred successfully');
+            } catch (error) {
+              console.error('Transfer receive error:', error);
+              setStatus('Transfer failed');
+            }
+          },
+          onReferred: () => {
+            setStatus('Call being transferred...');
+          },
         };
       } catch (error) {
         console.error('SIP initialization error:', error);
@@ -158,17 +182,13 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         });
 
         const data = await response.json();
-        console.log('Active users:', data.activeUsers);
-        // You can update UI with active users here
+        setOnlineUsers(data.activeUsers);
       } catch (error) {
         console.error('Heartbeat error:', error);
       }
     };
 
-    // Send heartbeat every 10 seconds
     const heartbeatInterval = setInterval(sendHeartbeat, 10000);
-
-    // Initial heartbeat
     sendHeartbeat();
 
     return () => clearInterval(heartbeatInterval);
@@ -242,30 +262,71 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     setNumber((prev) => prev + key);
   };
 
+  const handleTransfer = async (targetExtension: string) => {
+    if (!userAgent || !userAgent.isConnected()) return;
+
+    try {
+      const target = UserAgent.makeURI(
+        `sip:${targetExtension}@${credentials.server}`,
+      );
+      if (!target) {
+        throw new Error('Failed to create target URI');
+      }
+
+      if (userAgent.session) {
+        await userAgent.session.refer(target);
+        setStatus('Transferring call...');
+
+        setTimeout(() => {
+          setIsInCall(false);
+          setStatus('Call transferred');
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Transfer error:', error);
+      setStatus('Transfer failed');
+    }
+  };
+
   return (
-    <div className='phone-container'>
-      {isIncoming ? (
-        <div className='incoming-call'>
-          <p>Incoming call from {callerNumber}</p>
-          <div className='call-actions'>
-            <button className='answer' onClick={handleAnswer}>
-              <i className='fas fa-phone'></i>
-            </button>
-            <button className='reject' onClick={handleReject}>
-              <i className='fas fa-phone-slash'></i>
-            </button>
+    <div className='app-container'>
+      <OnlineUsers
+        users={onlineUsers}
+        onUserClick={(user) => {
+          if (isInCall) {
+            handleTransfer(user.split('@')[0]);
+          }
+        }}
+      />
+      <div className='phone-container'>
+        {isIncoming ? (
+          <div className='incoming-call'>
+            <p>Incoming call from {callerNumber}</p>
+            <div className='call-actions'>
+              <button className='answer' onClick={handleAnswer}>
+                <i className='fas fa-phone'></i>
+              </button>
+              <button className='reject' onClick={handleReject}>
+                <i className='fas fa-phone-slash'></i>
+              </button>
+            </div>
           </div>
-        </div>
-      ) : isInCall ? (
-        <CallInfo callerNumber={callerNumber} startTime={callStartTime} />
-      ) : (
-        <div className='ready-state'>
-          <div>
-            <p>Ready to receive calls</p>
-            <div className='status'>{status}</div>
+        ) : isInCall ? (
+          <CallInfo
+            callerNumber={callerNumber}
+            startTime={callStartTime}
+            onTransfer={handleTransfer}
+            onlineUsers={onlineUsers}
+          />
+        ) : (
+          <div className='ready-state'>
+            <div>
+              <p>Ready to receive calls</p>
+              <div className='status'>{status}</div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
