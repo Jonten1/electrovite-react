@@ -94,6 +94,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             setCallerNumber('');
             setStatus('Ready');
             setCallStartTime(null);
+            setSession(null);
             window.electron.Notification.close();
           });
 
@@ -103,6 +104,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             setCallerNumber('');
             setStatus('Ready');
             setCallStartTime(null);
+            setSession(null);
             window.electron.Notification.close();
           });
 
@@ -156,6 +158,18 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     return () => clearInterval(heartbeatInterval);
   }, [credentials]);
 
+  useEffect(() => {
+    const logSessionStatus = () => {
+      console.log('Session Status:', {
+        session,
+      });
+    };
+
+    const statusInterval = setInterval(logSessionStatus, 3000);
+
+    return () => clearInterval(statusInterval);
+  }, [session]);
+
   const handleAnswer = () => {
     if (session) {
       const options = {
@@ -169,6 +183,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const handleReject = () => {
     if (session) {
       session.terminate();
+      setSession(null);
       window.electron.Notification.close();
     }
   };
@@ -176,6 +191,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const handleHangup = () => {
     if (session) {
       session.terminate();
+      setSession(null);
     }
   };
 

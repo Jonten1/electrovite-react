@@ -17,16 +17,15 @@ const StatusBar = ({
     <div className='status-bar'>
       <div className='status-section'>
         <span className='status-text'>{status}</span>
-        {status !== 'Ready' && (
-          <button
-            className='reconnect-button'
-            onClick={onReconnect}
-            disabled={isConnecting}
-          >
-            <i className={`fas fa-sync ${isConnecting ? 'fa-spin' : ''}`}></i>
-            {isConnecting ? 'Connecting...' : 'Reconnect'}
-          </button>
-        )}
+
+        <button
+          className='reconnect-button'
+          onClick={onReconnect}
+          disabled={isConnecting}
+        >
+          <i className={`fas fa-sync ${isConnecting ? 'fa-spin' : ''}`}></i>
+          {isConnecting ? 'Connecting...' : 'Reconnect'}
+        </button>
       </div>
       <button className='logout-button' onClick={onLogout}>
         Logout
