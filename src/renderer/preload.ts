@@ -16,5 +16,9 @@ contextBridge.exposeInMainWorld('electron', {
   },
   SIP: {
     getStatus: (credentials: any) => ipcRenderer.invoke('get-sip-status', credentials)
+  },
+  env: {
+    USERNAME: process.env.USERNAME || '',
+    PASSWORD: process.env.PASSWORD || ''
   }
 });

@@ -9,9 +9,20 @@ interface LoginProps {
   }) => void;
 }
 
+declare global {
+  interface Window {
+    electron: {
+      env: {
+        USERNAME: string;
+        PASSWORD: string;
+      };
+    };
+  }
+}
+
 const Login = ({ onLogin }: LoginProps) => {
-  const [username, setUsername] = useState('4600120060');
-  const [password, setPassword] = useState('9660A96589A18CC4ED49C5DA63A6C669');
+  const [username, setUsername] = useState(window.electron.env.USERNAME);
+  const [password, setPassword] = useState(window.electron.env.PASSWORD);
   const [server] = useState('voip.46elks.com');
 
   const handleSubmit = (e: React.FormEvent) => {
