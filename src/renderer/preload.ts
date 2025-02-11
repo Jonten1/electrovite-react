@@ -14,11 +14,8 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.send('close-notification');
     }
   },
-  SIP: {
-    getStatus: (credentials: any) => ipcRenderer.invoke('get-sip-status', credentials)
-  },
   env: {
-    USERNAME: process.env.USERNAME || '',
-    PASSWORD: process.env.PASSWORD || ''
+    USERNAME: process.env.REACT_APP_USERNAME || '',
+    PASSWORD: process.env.REACT_APP_PASSWORD || ''
   }
 });
