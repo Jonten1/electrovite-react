@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserAgent, Web } from 'sip.js';
+import JsSIP from 'jssip';
 import '../styles/phone.scss';
 import CallInfo from './CallInfo';
 import OnlineUsers from './OnlineUsers';
@@ -29,8 +29,8 @@ declare global {
 }
 
 const Phone = ({ credentials, onLogout }: PhoneProps) => {
-  const [userAgent, setUserAgent] = useState<Web.SimpleUser | null>(null);
-  const [number, setNumber] = useState('');
+  const [userAgent, setUserAgent] = useState<JsSIP.UA | null>(null);
+  const [session, setSession] = useState<JsSIP.RTCSession | null>(null);
   const [status, setStatus] = useState('Connecting...');
   const [isInCall, setIsInCall] = useState(false);
   const [isIncoming, setIsIncoming] = useState(false);
@@ -41,118 +41,80 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
-    const initializeSIP = async () => {
+    const initializeSIP = () => {
       try {
-        console.log('Credentials:', credentials); // Debug log
+        JsSIP.debug.enable('JsSIP:*'); // Enable debugging
 
-        const [username] = credentials.username.split('@');
-
-        const sipUri = UserAgent.makeURI(
-          `sip:${username}@${credentials.server}`,
-        );
-
-        if (!sipUri) {
-          throw new Error('Failed to create SIP URI');
-        }
-
-        const simpleUser = new Web.SimpleUser(
+        const socket = new JsSIP.WebSocketInterface(
           `wss://${credentials.server}/w1/websocket`,
-          {
-            aor: sipUri.toString(),
-            media: {
-              constraints: { audio: true, video: false },
-              // Add ICE servers for WebRTC
-              iceServers: [
-                {
-                  urls: ['stun:stun.46elks.com:3478'],
-                },
-              ],
-              // Enable PSTN interop
-              rtcConfiguration: {
-                iceTransportPolicy: 'all',
-                bundlePolicy: 'balanced',
-              },
-            },
-            userAgentOptions: {
-              authorizationUsername: username,
-              authorizationPassword: credentials.password,
-              displayName: username,
-              uri: sipUri,
-              // Add transport options
-              transportOptions: {
-                wsServers: [`wss://${credentials.server}/w1/websocket`],
-                traceSip: true, // For debugging
-              },
-            },
-          },
         );
 
-        await simpleUser.connect();
-        await simpleUser.register();
-        setUserAgent(simpleUser);
-        setStatus('Ready');
+        const configuration = {
+          sockets: [socket],
+          uri: `sip:${credentials.username}`,
+          password: credentials.password,
+          realm: credentials.server,
+          display_name: credentials.username.split('@')[0],
+        };
 
-        // Log registration state changes
-        simpleUser.delegate = {
-          onCallReceived: async () => {
-            if (!simpleUser.session) return;
+        const ua = new JsSIP.UA(configuration);
 
-            const formattedNumber =
-              simpleUser.session?.remoteIdentity?.uri?.user || 'Unknown';
+        // Register event handlers
+        ua.on('registered', () => {
+          setStatus('Ready');
+        });
 
-            // Create system notification
-            window.electron.Notification.create('Incoming Call', {
-              body: `From ${formattedNumber}`,
-            });
+        ua.on('unregistered', () => {
+          setStatus('Unregistered');
+        });
 
+        ua.on('registrationFailed', (error) => {
+          console.error('Registration failed:', error);
+          setStatus('Registration failed');
+        });
+
+        ua.on('newRTCSession', ({ session: newSession }) => {
+          setSession(newSession);
+
+          if (newSession.direction === 'incoming') {
+            const number = newSession.remote_identity.uri.user;
+            setCallerNumber(number);
             setIsIncoming(true);
             setIsInCall(true);
-            setCallerNumber(formattedNumber);
-            setStatus(`Incoming call from ${formattedNumber}`);
-            setCallStartTime(null);
-          },
-          onCallHangup: () => {
-            window.electron.Notification.close();
-            setIsIncoming(false);
+            setStatus(`Incoming call from ${number}`);
+
+            window.electron.Notification.create('Incoming Call', {
+              body: `From ${number}`,
+            });
+          }
+
+          newSession.on('ended', () => {
             setIsInCall(false);
+            setIsIncoming(false);
+            setCallerNumber('');
             setStatus('Ready');
             setCallStartTime(null);
-          },
-          onRegistered: () => {
-            setStatus('Registered');
-          },
-          onUnregistered: () => {
-            setStatus('Unregistered');
-          },
-          onServerConnect: () => {
-            setStatus('Connected to server');
-          },
-          onServerDisconnect: () => {
-            setStatus('Disconnected from server');
-          },
-          onRefer: async (referral) => {
-            try {
-              setStatus('Receiving transfer...');
-              await referral.accept();
-              setIsInCall(true);
-              setCallStartTime(new Date());
+            window.electron.Notification.close();
+          });
 
-              // Get the transferred number
-              const transferredNumber = referral.referTo?.normal?.user;
-              if (transferredNumber) {
-                setCallerNumber(transferredNumber);
-              }
+          newSession.on('failed', () => {
+            setIsInCall(false);
+            setIsIncoming(false);
+            setCallerNumber('');
+            setStatus('Ready');
+            setCallStartTime(null);
+            window.electron.Notification.close();
+          });
 
-              setStatus('Call transferred successfully');
-            } catch (error) {
-              console.error('Transfer receive error:', error);
-              setStatus('Transfer failed');
-            }
-          },
-          onReferred: () => {
-            setStatus('Call being transferred...');
-          },
-        };
+          newSession.on('accepted', () => {
+            setIsIncoming(false);
+            setStatus('In call');
+            setCallStartTime(new Date());
+          });
+        });
+
+        ua.start();
+        setUserAgent(ua);
       } catch (error) {
         console.error('SIP initialization error:', error);
         setStatus('Connection failed');
@@ -161,10 +123,9 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
     initializeSIP();
 
-    // Cleanup on unmount
     return () => {
       if (userAgent) {
-        userAgent.disconnect();
+        userAgent.stop();
       }
     };
   }, [credentials]);
@@ -195,177 +156,46 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     return () => clearInterval(heartbeatInterval);
   }, [credentials]);
 
-  const handleCall = async () => {
-    if (!number) return;
-    try {
-      const response = await fetch('http://localhost:5000/make-call', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phoneNumber: number,
-          webrtcNumber: credentials.username.split('@')[0], // This gets the '4600120060' part
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to initiate call');
-      }
-
-      setIsInCall(true);
-      setStatus('Calling...');
-      setCallStartTime(new Date());
-    } catch (error) {
-      console.error('Call error:', error);
-      setStatus('Call failed');
-    }
-  };
-
-  const handleHangup = async () => {
-    if (!userAgent) return;
-    try {
-      await userAgent.hangup();
-      setIsInCall(false);
-      setStatus('Ready');
-    } catch (error) {
-      console.error('Hangup error:', error);
-    }
-  };
-
-  const handleAnswer = async () => {
-    if (!userAgent) return;
-    try {
-      await userAgent.answer();
+  const handleAnswer = () => {
+    if (session) {
+      const options = {
+        mediaConstraints: { audio: true, video: false },
+      };
+      session.answer(options);
       window.electron.Notification.close();
-      setIsIncoming(false);
-      setStatus('In call');
-      setCallStartTime(new Date());
-    } catch (error) {
-      console.error('Answer error:', error);
-      setStatus('Failed to answer');
     }
   };
 
-  const handleReject = async () => {
-    if (!userAgent) return;
-    try {
-      await userAgent.hangup();
-      setIsIncoming(false);
-      setIsInCall(false);
-      setStatus('Ready');
-    } catch (error) {
-      console.error('Reject error:', error);
+  const handleReject = () => {
+    if (session) {
+      session.terminate();
+      window.electron.Notification.close();
     }
   };
 
-  const handleKeyPress = (key: string) => {
-    setNumber((prev) => prev + key);
-  };
-
-  const handleTransfer = async (targetExtension: string) => {
-    if (!userAgent || !userAgent.isConnected()) return;
-
-    try {
-      const target = UserAgent.makeURI(`4600120059@voip.46elks.com}`);
-      console.log('Target:', target);
-      if (!target) {
-        throw new Error('Failed to create target URI');
-      }
-
-      if (userAgent.session) {
-        await userAgent.session.refer(target);
-        setStatus('Transferring call...');
-
-        setTimeout(() => {
-          setIsInCall(false);
-          setStatus('Call transferred');
-        }, 1000);
-      }
-    } catch (error) {
-      console.error('Transfer error:', error);
-      setStatus('Transfer failed');
+  const handleHangup = () => {
+    if (session) {
+      session.terminate();
     }
   };
 
-  const handleMuteToggle = async () => {
-    if (!userAgent || !userAgent.session) return;
-
-    try {
-      const session = userAgent.session;
-      const sessionDescriptionHandler = session.sessionDescriptionHandler;
-
-      if (sessionDescriptionHandler && 'mute' in sessionDescriptionHandler) {
-        if (isMuted) {
-          await sessionDescriptionHandler.unmute();
-        } else {
-          await sessionDescriptionHandler.mute();
-        }
-        setIsMuted(!isMuted);
-      }
-    } catch (error) {
-      console.error('Mute toggle error:', error);
+  const handleMuteToggle = () => {
+    if (session) {
+      const audioTracks = session.connection
+        .getLocalStreams()[0]
+        .getAudioTracks();
+      audioTracks.forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+      setIsMuted(!isMuted);
     }
   };
 
-  const handleReconnect = async () => {
-    if (isConnecting) return;
-
-    try {
-      setIsConnecting(true);
+  const handleReconnect = () => {
+    if (userAgent) {
+      userAgent.stop();
+      userAgent.start();
       setStatus('Reconnecting...');
-
-      if (userAgent) {
-        await userAgent.disconnect();
-        setUserAgent(null);
-      }
-
-      // Re-initialize SIP connection
-      const [username] = credentials.username.split('@');
-      const sipUri = UserAgent.makeURI(`sip:${username}@${credentials.server}`);
-
-      if (!sipUri) {
-        throw new Error('Failed to create SIP URI');
-      }
-
-      const simpleUser = new Web.SimpleUser(
-        `wss://${credentials.server}/w1/websocket`,
-        {
-          aor: sipUri.toString(),
-          media: {
-            constraints: { audio: true, video: false },
-            iceServers: [
-              {
-                urls: ['stun:stun.46elks.com:3478'],
-              },
-            ],
-            rtcConfiguration: {
-              iceTransportPolicy: 'all',
-              bundlePolicy: 'balanced',
-            },
-          },
-          userAgentOptions: {
-            authorizationUsername: username,
-            authorizationPassword: credentials.password,
-            displayName: username,
-            uri: sipUri,
-            transportOptions: {
-              wsServers: [`wss://${credentials.server}/w1/websocket`],
-              traceSip: true,
-            },
-          },
-        },
-      );
-
-      await simpleUser.connect();
-      await simpleUser.register();
-      setUserAgent(simpleUser);
-      setStatus('Ready');
-    } catch (error) {
-      console.error('Reconnection error:', error);
-      setStatus('Connection failed');
-    } finally {
-      setIsConnecting(false);
     }
   };
 
@@ -375,7 +205,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         users={onlineUsers}
         onUserClick={(user) => {
           if (isInCall) {
-            handleTransfer(user.split('@')[0]);
+            // Implement transfer logic here
           }
         }}
       />
@@ -402,7 +232,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           <CallInfo
             callerNumber={callerNumber}
             startTime={callStartTime}
-            onTransfer={handleTransfer}
+            onTransfer={() => {}}
             onlineUsers={onlineUsers}
             isMuted={isMuted}
             onMuteToggle={handleMuteToggle}
