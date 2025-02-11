@@ -3,6 +3,7 @@ import { UserAgent, Web } from 'sip.js';
 import '../styles/phone.scss';
 import CallInfo from './CallInfo';
 import OnlineUsers from './OnlineUsers';
+import StatusBar from './StatusBar';
 
 interface PhoneProps {
   credentials: {
@@ -36,6 +37,8 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [callerNumber, setCallerNumber] = useState('');
   const [callStartTime, setCallStartTime] = useState<Date | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
     const initializeSIP = async () => {
@@ -92,18 +95,16 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         // Log registration state changes
         simpleUser.delegate = {
           onCallReceived: async () => {
-            // Log the session information
+            if (!simpleUser.session) return;
 
-            // Format the number (remove + if present)
             const formattedNumber =
-              simpleUser.session.dialog.initialTransaction.request.from.uri
-                .normal.user;
+              simpleUser.session?.remoteIdentity?.uri?.user || 'Unknown';
 
-            // Create system notification using the exposed API
-            window.electron.Notification.create(
-              'Incoming Call',
-              `From ${formattedNumber}`,
-            );
+            // Create system notification
+            window.electron.Notification.create('Incoming Call', {
+              body: `From ${formattedNumber}`,
+            });
+
             setIsIncoming(true);
             setIsInCall(true);
             setCallerNumber(formattedNumber);
@@ -266,9 +267,8 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     if (!userAgent || !userAgent.isConnected()) return;
 
     try {
-      const target = UserAgent.makeURI(
-        `sip:${targetExtension}@${credentials.server}`,
-      );
+      const target = UserAgent.makeURI(`4600120059@voip.46elks.com}`);
+      console.log('Target:', target);
       if (!target) {
         throw new Error('Failed to create target URI');
       }
@@ -288,6 +288,87 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     }
   };
 
+  const handleMuteToggle = async () => {
+    if (!userAgent || !userAgent.session) return;
+
+    try {
+      const session = userAgent.session;
+      const sessionDescriptionHandler = session.sessionDescriptionHandler;
+
+      if (sessionDescriptionHandler && 'mute' in sessionDescriptionHandler) {
+        if (isMuted) {
+          await sessionDescriptionHandler.unmute();
+        } else {
+          await sessionDescriptionHandler.mute();
+        }
+        setIsMuted(!isMuted);
+      }
+    } catch (error) {
+      console.error('Mute toggle error:', error);
+    }
+  };
+
+  const handleReconnect = async () => {
+    if (isConnecting) return;
+
+    try {
+      setIsConnecting(true);
+      setStatus('Reconnecting...');
+
+      if (userAgent) {
+        await userAgent.disconnect();
+        setUserAgent(null);
+      }
+
+      // Re-initialize SIP connection
+      const [username] = credentials.username.split('@');
+      const sipUri = UserAgent.makeURI(`sip:${username}@${credentials.server}`);
+
+      if (!sipUri) {
+        throw new Error('Failed to create SIP URI');
+      }
+
+      const simpleUser = new Web.SimpleUser(
+        `wss://${credentials.server}/w1/websocket`,
+        {
+          aor: sipUri.toString(),
+          media: {
+            constraints: { audio: true, video: false },
+            iceServers: [
+              {
+                urls: ['stun:stun.46elks.com:3478'],
+              },
+            ],
+            rtcConfiguration: {
+              iceTransportPolicy: 'all',
+              bundlePolicy: 'balanced',
+            },
+          },
+          userAgentOptions: {
+            authorizationUsername: username,
+            authorizationPassword: credentials.password,
+            displayName: username,
+            uri: sipUri,
+            transportOptions: {
+              wsServers: [`wss://${credentials.server}/w1/websocket`],
+              traceSip: true,
+            },
+          },
+        },
+      );
+
+      await simpleUser.connect();
+      await simpleUser.register();
+      setUserAgent(simpleUser);
+      setStatus('Ready');
+    } catch (error) {
+      console.error('Reconnection error:', error);
+      setStatus('Connection failed');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
   return (
     <div className='app-container'>
       <OnlineUsers
@@ -299,6 +380,12 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         }}
       />
       <div className='phone-container'>
+        <StatusBar
+          status={status}
+          onLogout={onLogout}
+          onReconnect={handleReconnect}
+          isConnecting={isConnecting}
+        />
         {isIncoming ? (
           <div className='incoming-call'>
             <p>Incoming call from {callerNumber}</p>
@@ -317,6 +404,9 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             startTime={callStartTime}
             onTransfer={handleTransfer}
             onlineUsers={onlineUsers}
+            isMuted={isMuted}
+            onMuteToggle={handleMuteToggle}
+            onEndCall={handleHangup}
           />
         ) : (
           <div className='ready-state'>

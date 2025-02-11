@@ -7,11 +7,47 @@
   color: white;
   width: 100%;
 
-  span {
-    font-weight: 500;
+  .status-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+
+    .status-text {
+      font-weight: 500;
+    }
+
+    .reconnect-button {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+
+      &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      i {
+        font-size: 0.9rem;
+      }
+
+      &.fa-spin {
+        animation: fa-spin 1s infinite linear;
+      }
+    }
   }
 
-  button {
+  .logout-button {
     padding: 0.5rem 1rem;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 6px;
@@ -23,5 +59,15 @@
     &:hover {
       background: rgba(255, 255, 255, 0.1);
     }
+  }
+}
+
+@keyframes fa-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
   }
 }

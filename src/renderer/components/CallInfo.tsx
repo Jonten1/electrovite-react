@@ -5,6 +5,9 @@ interface CallInfoProps {
   startTime: Date | null;
   onTransfer: (targetExtension: string) => void;
   onlineUsers: string[];
+  isMuted: boolean;
+  onMuteToggle: () => void;
+  onEndCall: () => void;
 }
 
 const CallInfo = ({
@@ -12,12 +15,13 @@ const CallInfo = ({
   startTime,
   onTransfer,
   onlineUsers = [],
+  isMuted,
+  onMuteToggle,
+  onEndCall,
 }: CallInfoProps) => {
   const [elapsedTime, setElapsedTime] = useState('00:00');
   const [showTransfer, setShowTransfer] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
-
-  console.log('CallInfo props:', { callerNumber, startTime }); // Debug props
 
   useEffect(() => {
     if (!startTime) return;
@@ -54,6 +58,19 @@ const CallInfo = ({
       <div className='timer'>
         <span className='label'>Duration:</span>
         <span className='time'>{elapsedTime}</span>
+      </div>
+      <div className='call-controls'>
+        <button
+          className={`mute-button ${isMuted ? 'muted' : ''}`}
+          onClick={onMuteToggle}
+        >
+          <i className={`fas fa-microphone${isMuted ? '-slash' : ''}`}></i>
+          {isMuted ? 'Unmute' : 'Mute'}
+        </button>
+        <button className='end-call-button' onClick={onEndCall}>
+          <i className='fas fa-phone-slash'></i>
+          End Call
+        </button>
       </div>
       <div className='transfer-controls'>
         <button onClick={() => setShowTransfer(!showTransfer)}>

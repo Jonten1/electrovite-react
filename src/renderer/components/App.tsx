@@ -80,10 +80,7 @@ const App = () => {
   };
 
   return credentials ? (
-    <>
-      <StatusBar status={credentials.username} onLogout={handleLogout} />
-      <Phone credentials={credentials} onLogout={handleLogout} />
-    </>
+    <Phone credentials={credentials} onLogout={handleLogout} />
   ) : (
     <Login onLogin={handleLogin} />
   );
