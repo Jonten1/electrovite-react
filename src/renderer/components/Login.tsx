@@ -13,6 +13,7 @@ declare global {
   interface Window {
     electron: {
       env: {
+        API_URL: string;
         USERNAME: string;
         PASSWORD: string;
       };

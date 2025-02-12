@@ -140,15 +140,18 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         handleReconnect();
       }
       try {
-        const response = await fetch('http://localhost:5000/heartbeat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+        const response = await fetch(
+          window.electron.env.API_URL + '/heartbeat',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: credentials.username,
+            }),
           },
-          body: JSON.stringify({
-            username: credentials.username,
-          }),
-        });
+        );
 
         const data = await response.json();
         setOnlineUsers(data.activeUsers);

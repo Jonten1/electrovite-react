@@ -15,7 +15,7 @@ const App = () => {
     if (savedCredentials) {
       const creds = JSON.parse(savedCredentials);
       // Make login request to backend with saved credentials
-      fetch('http://localhost:5000/login', {
+      fetch(window.electron.env.API_URL + '/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,7 +46,7 @@ const App = () => {
     server: string;
   }) => {
     try {
-      const response = await fetch('http://localhost:5000/login', {
+      const response = await fetch(window.electron.env.API_URL + '/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,7 +69,7 @@ const App = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:5000/logout', {
+      await fetch(window.electron.env.API_URL + '/logout', {
         method: 'POST',
         credentials: 'include',
       });
