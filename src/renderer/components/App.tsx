@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Login from './Login';
 import Phone from './Phone';
-import StatusBar from './StatusBar';
 
 const App = () => {
   const [credentials, setCredentials] = useState<null | {
@@ -9,36 +8,6 @@ const App = () => {
     password: string;
     server: string;
   }>(null);
-
-  useEffect(() => {
-    const savedCredentials = localStorage.getItem('credentials');
-    if (savedCredentials) {
-      const creds = JSON.parse(savedCredentials);
-      // Make login request to backend with saved credentials
-      fetch(window.electron.env.API_URL + '/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: creds.username,
-          password: creds.password,
-        }),
-        credentials: 'include', // Important for session cookie
-      })
-        .then((res) => {
-          if (res.ok) {
-            setCredentials(creds);
-          } else {
-            localStorage.removeItem('credentials');
-          }
-        })
-        .catch((error) => {
-          console.error('Login error:', error);
-          localStorage.removeItem('credentials');
-        });
-    }
-  }, []);
 
   const handleLogin = async (creds: {
     username: string;
@@ -55,11 +24,9 @@ const App = () => {
           username: creds.username,
           password: creds.password,
         }),
-        credentials: 'include',
       });
 
       if (response.ok) {
-        localStorage.setItem('credentials', JSON.stringify(creds));
         setCredentials(creds);
       }
     } catch (error) {
@@ -67,16 +34,8 @@ const App = () => {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch(window.electron.env.API_URL + '/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } finally {
-      localStorage.removeItem('credentials');
-      setCredentials(null);
-    }
+  const handleLogout = () => {
+    setCredentials(null);
   };
 
   return credentials ? (

@@ -70,7 +70,6 @@ app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   if (username && password) {
-    req.session.user = { username };
     res.json({ success: true });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
@@ -146,13 +145,7 @@ app.post('/make-call', async (req, res) => {
 });
 
 app.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      res.status(500).json({ error: 'Failed to logout' });
-    } else {
-      res.json({ success: true });
-    }
-  });
+  res.json({ success: true });
 });
 
 const activeUsers = new Map(); // Store active users and their last heartbeat

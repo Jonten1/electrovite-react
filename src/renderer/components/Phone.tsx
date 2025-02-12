@@ -39,7 +39,29 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [uptime, setUptime] = useState(0);
+  const [registeredTime, setRegisteredTime] = useState<Date | null>(null);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setUptime((prev) => prev + 1);
+    }, 1000);
 
+    return () => clearInterval(timer);
+  }, []);
+
+  // Add new useEffect for logging
+  useEffect(() => {
+    if (uptime % 10 === 0) {
+      // Log every 10 seconds to avoid console spam
+      console.log(`Component uptime: ${uptime}s`);
+      if (registeredTime) {
+        const registeredSeconds = Math.floor(
+          (Date.now() - registeredTime.getTime()) / 1000,
+        );
+        console.log(`Registered time: ${registeredSeconds}s`);
+      }
+    }
+  }, [uptime, registeredTime]);
   useEffect(() => {
     const initializeSIP = () => {
       try {
@@ -62,6 +84,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         // Register event handlers
         ua.on('registered', () => {
           setStatus('Ready');
+          setRegisteredTime(new Date());
         });
 
         ua.on('unregistered', () => {
@@ -207,13 +230,39 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     }
   };
 
+  const handleTransfer = async (targetExtension: string) => {
+    if (!userAgent || !userAgent.isConnected()) return;
+
+    try {
+      const target = UserAgent.makeURI(
+        `sip:${targetExtension}@${credentials.server}`,
+      );
+      if (!target) {
+        throw new Error('Failed to create target URI');
+      }
+
+      if (userAgent.session) {
+        await userAgent.session.refer(target);
+        setStatus('Transferring call...');
+
+        setTimeout(() => {
+          setIsInCall(false);
+          setStatus('Call transferred');
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Transfer error:', error);
+      setStatus('Transfer failed');
+    }
+  };
+
   return (
     <div className='app-container'>
       <OnlineUsers
         users={onlineUsers}
         onUserClick={(user) => {
           if (isInCall) {
-            // Implement transfer logic here
+            handleTransfer(user.split('@')[0]);
           }
         }}
       />
@@ -240,7 +289,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           <CallInfo
             callerNumber={callerNumber}
             startTime={callStartTime}
-            onTransfer={() => {}}
+            onTransfer={handleTransfer}
             onlineUsers={onlineUsers}
             isMuted={isMuted}
             onMuteToggle={handleMuteToggle}
