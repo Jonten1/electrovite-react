@@ -177,6 +177,22 @@ const logActiveUsers = () => {
   console.log(); // Empty line for readability
 };
 
+const notifyUsersToReregister = (senderUsername) => {
+  activeUsers.forEach((ws, user) => {
+    if (user !== senderUsername && ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'reregister',
+          from: senderUsername,
+        }),
+      );
+      console.log(
+        `📢 Notifying ${user} to reregister (triggered by ${senderUsername})`,
+      );
+    }
+  });
+};
+
 wss.on('connection', (ws) => {
   let username = '';
 
@@ -209,13 +225,19 @@ app.post('/ping', (req, res) => {
   const { username } = req.body;
   console.log('\n📍 Ping from:', username);
 
-  // Add user to active users even if they don't have a WebSocket yet
   if (!activeUsers.has(username)) {
     activeUsers.set(username, null);
     console.log(`Added user ${username} to active users`);
   }
 
   logActiveUsers();
+  res.json({ success: true });
+});
+
+app.post('/call-ended', (req, res) => {
+  const { username } = req.body;
+  console.log('\n📞 Call ended by:', username);
+  notifyUsersToReregister(username);
   res.json({ success: true });
 });
 

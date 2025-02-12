@@ -164,40 +164,13 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   }, [credentials]);
 
   useEffect(() => {
-    const sendHeartbeat = async () => {
-      try {
-        const response = await fetch(
-          window.electron.env.API_URL + '/heartbeat',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              username: credentials.username,
-            }),
-          },
-        );
-
-        const data = await response.json();
-        setOnlineUsers(data.activeUsers);
-      } catch (error) {
-        console.error('Heartbeat error:', error);
-      }
-    };
-
-    const heartbeatInterval = setInterval(sendHeartbeat, 10000);
-    sendHeartbeat();
-
-    return () => clearInterval(heartbeatInterval);
-  }, [credentials, session]);
-
-  useEffect(() => {
-    // Connect to WebSocket server
-    const ws = new WebSocket(`ws://${window.location.hostname}:3000`);
+    // Connect to WebSocket server using the API_URL from env
+    const wsUrl = window.electron.env.API_URL.replace('http://', 'ws://');
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      console.log('WebSocket connected successfully');
       ws.send(
         JSON.stringify({
           type: 'register',
@@ -206,17 +179,36 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       );
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'reregister') {
-        console.log(`Reregistering due to update from ${data.from}`);
+        console.log(`📞 Reregistering due to call end from ${data.from}`);
+
         if (userAgent) {
-          userAgent.register();
+          try {
+            await userAgent.unregister();
+            console.log('Unregistered successfully');
+
+            setTimeout(() => {
+              userAgent.register();
+              console.log('Reregistering...');
+            }, 1000);
+          } catch (error) {
+            console.error('Error during reregistration:', error);
+          }
         }
       }
     };
 
-    return () => ws.close();
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
   }, [credentials]);
 
   const handleAnswer = () => {
