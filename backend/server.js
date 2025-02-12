@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import session from 'express-session';
+import WebSocket from 'ws';
 
 dotenv.config();
 
@@ -70,6 +71,7 @@ app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   if (username && password) {
+    req.session.user = { username };
     res.json({ success: true });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
@@ -145,27 +147,82 @@ app.post('/make-call', async (req, res) => {
 });
 
 app.post('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      res.status(500).json({ error: 'Failed to logout' });
+    } else {
+      res.json({ success: true });
+    }
+  });
+});
+
+// Create HTTP server
+const server = http.createServer(app);
+
+// Create WebSocket server
+const wss = new WebSocketServer({ server });
+
+const activeUsers = new Map(); // Store active users and their WebSocket connections
+
+// Helper function to log current users
+const logActiveUsers = () => {
+  console.log('\nCurrently connected users:');
+  if (activeUsers.size === 0) {
+    console.log('No users connected');
+  } else {
+    activeUsers.forEach((_, username) => {
+      console.log(`- ${username}`);
+    });
+  }
+  console.log(); // Empty line for readability
+};
+
+wss.on('connection', (ws) => {
+  let username = '';
+
+  ws.on('message', (message) => {
+    const data = JSON.parse(message.toString());
+    if (data.type === 'register') {
+      username = data.username;
+      activeUsers.set(username, ws);
+      console.log(`\n👤 WebSocket connected for user: ${username}`);
+      logActiveUsers();
+    }
+  });
+
+  ws.on('close', () => {
+    if (username) {
+      activeUsers.delete(username);
+      console.log(`\n🚫 User disconnected: ${username}`);
+      logActiveUsers();
+    }
+  });
+});
+
+// Endpoint to get current active users
+app.get('/users', (req, res) => {
+  const userList = Array.from(activeUsers.keys());
+  res.json({ users: userList });
+});
+
+app.post('/ping', (req, res) => {
+  const { username } = req.body;
+  console.log('\n📍 Ping from:', username);
+
+  // Add user to active users even if they don't have a WebSocket yet
+  if (!activeUsers.has(username)) {
+    activeUsers.set(username, null);
+    console.log(`Added user ${username} to active users`);
+  }
+
+  logActiveUsers();
   res.json({ success: true });
 });
 
-const activeUsers = new Map(); // Store active users and their last heartbeat
-
-app.post('/heartbeat', (req, res) => {
-  const { username } = req.body;
-  activeUsers.set(username, Date.now());
-
-  // Clean up inactive users (no heartbeat for more than 30 seconds)
-  for (const [user, lastBeat] of activeUsers.entries()) {
-    if (Date.now() - lastBeat > 30000) {
-      activeUsers.delete(user);
-    }
-  }
-
-  // Return list of active users
-  const activeUsersList = Array.from(activeUsers.keys());
-  res.json({ activeUsers: activeUsersList });
+// Start server
+server.listen(PORT, () => {
+  console.log(`\n🚀 Server running on port ${PORT}`);
+  console.log('Waiting for connections...\n');
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+export default app;

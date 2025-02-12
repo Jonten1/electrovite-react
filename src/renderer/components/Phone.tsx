@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import JsSIP from 'jssip';
 import '../styles/phone.scss';
 import CallInfo from './CallInfo';
@@ -41,6 +41,8 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [uptime, setUptime] = useState(0);
   const [registeredTime, setRegisteredTime] = useState<Date | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setUptime((prev) => prev + 1);
@@ -49,10 +51,8 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Add new useEffect for logging
   useEffect(() => {
     if (uptime % 10 === 0) {
-      // Log every 10 seconds to avoid console spam
       console.log(`Component uptime: ${uptime}s`);
       if (registeredTime) {
         const registeredSeconds = Math.floor(
@@ -62,10 +62,11 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       }
     }
   }, [uptime, registeredTime]);
+
   useEffect(() => {
     const initializeSIP = () => {
       try {
-        JsSIP.debug.enable('JsSIP:*'); // Enable debugging
+        JsSIP.debug.enable('JsSIP:*');
 
         const socket = new JsSIP.WebSocketInterface(
           `wss://${credentials.server}/w1/websocket`,
@@ -81,10 +82,16 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
         const ua = new JsSIP.UA(configuration);
 
-        // Register event handlers
         ua.on('registered', () => {
           setStatus('Ready');
           setRegisteredTime(new Date());
+          fetch(window.electron.env.API_URL + '/ping', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username: credentials.username }),
+          });
         });
 
         ua.on('unregistered', () => {
@@ -184,6 +191,33 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
     return () => clearInterval(heartbeatInterval);
   }, [credentials, session]);
+
+  useEffect(() => {
+    // Connect to WebSocket server
+    const ws = new WebSocket(`ws://${window.location.hostname}:3000`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(
+        JSON.stringify({
+          type: 'register',
+          username: credentials.username,
+        }),
+      );
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'reregister') {
+        console.log(`Reregistering due to update from ${data.from}`);
+        if (userAgent) {
+          userAgent.register();
+        }
+      }
+    };
+
+    return () => ws.close();
+  }, [credentials]);
 
   const handleAnswer = () => {
     if (session) {

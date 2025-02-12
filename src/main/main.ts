@@ -44,7 +44,7 @@ app.on('activate', () => {
 });
 app.on('ready', () => {
   // Set the AppUserModelId
-  app.setAppUserModelId('SkyPhone');
+  app.setAppUserModelId('SkySip');
 
   createMainWindow();
 });

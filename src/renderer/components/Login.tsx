@@ -12,6 +12,7 @@ interface LoginProps {
 declare global {
   interface Window {
     electron: {
+      ipcRenderer: any;
       env: {
         API_URL: string;
         USERNAME: string;
