@@ -135,10 +135,6 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
   useEffect(() => {
     const sendHeartbeat = async () => {
-      if (session === null) {
-        console.log('Session is null, reconnecting...');
-        handleReconnect();
-      }
       try {
         const response = await fetch(
           window.electron.env.API_URL + '/heartbeat',
