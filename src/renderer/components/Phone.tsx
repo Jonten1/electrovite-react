@@ -75,6 +75,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
         ua.on('newRTCSession', ({ session: newSession }) => {
           setSession(newSession);
+          console.log(newSession);
 
           if (newSession.direction === 'incoming') {
             const number = newSession.remote_identity.uri.user;
@@ -134,6 +135,10 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
   useEffect(() => {
     const sendHeartbeat = async () => {
+      if (session === null) {
+        console.log('Session is null, reconnecting...');
+        handleReconnect();
+      }
       try {
         const response = await fetch('http://localhost:5000/heartbeat', {
           method: 'POST',
@@ -156,19 +161,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     sendHeartbeat();
 
     return () => clearInterval(heartbeatInterval);
-  }, [credentials]);
-
-  useEffect(() => {
-    const logSessionStatus = () => {
-      console.log('Session Status:', {
-        session,
-      });
-    };
-
-    const statusInterval = setInterval(logSessionStatus, 3000);
-
-    return () => clearInterval(statusInterval);
-  }, [session]);
+  }, [credentials, session]);
 
   const handleAnswer = () => {
     if (session) {
