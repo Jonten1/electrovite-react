@@ -227,7 +227,24 @@ wss.on('connection', (ws) => {
       logActiveUsers();
     }
 
-    // Add test message handler
+    if (data.type === 'reregister') {
+      console.log(`\n📞 Reregister request from ${data.from} - ${data.action}`);
+      // Notify all other users to reregister
+      activeUsers.forEach((clientWs, user) => {
+        if (user !== data.from && clientWs?.readyState === WebSocket.OPEN) {
+          clientWs.send(
+            JSON.stringify({
+              type: 'reregister',
+              from: data.from,
+              action: data.action,
+            }),
+          );
+          console.log(
+            `📢 Notifying ${user} to reregister (triggered by ${data.from} - ${data.action})`,
+          );
+        }
+      });
+    }
   });
 
   ws.on('close', () => {

@@ -208,21 +208,32 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-      console.log('📨 Received WebSocket message:', data); // Log all received messages
+      console.log('📨 Received WebSocket message:', data);
 
       if (data.type === 'reregister') {
         console.log(`📞 Reregistering request from ${data.from}`);
-        // Only reregister if we're not in an active call
-        console.log(isInCall);
+        console.log('Current call status:', isInCall);
 
-        if (!isInCall) {
+        if (!isInCall && userAgent) {
           try {
-            handleReconnect();
+            await userAgent.unregister();
+            console.log('Unregistered successfully');
+
+            setTimeout(() => {
+              if (userAgent) {
+                userAgent.register();
+                console.log('Reregistering...');
+              }
+            }, 1000);
           } catch (error) {
             console.error('Error during reregistration:', error);
           }
         } else {
-          console.log('Skipping reregistration - active call in progress');
+          console.log(
+            isInCall
+              ? 'Skipping reregistration - active call in progress'
+              : 'Skipping reregistration - no userAgent available',
+          );
         }
       }
     };
@@ -276,9 +287,19 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   };
 
   const handleReconnect = () => {
-    userAgent.stop();
-    userAgent.start();
-    setStatus('Reconnecting...');
+    if (!userAgent) {
+      console.error('Cannot reconnect: userAgent is null');
+      return;
+    }
+
+    try {
+      userAgent.stop();
+      userAgent.start();
+      setStatus('Reconnecting...');
+    } catch (error) {
+      console.error('Reconnect error:', error);
+      setStatus('Reconnect failed');
+    }
   };
 
   const handleTransfer = async (targetExtension: string) => {
