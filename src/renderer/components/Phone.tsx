@@ -214,6 +214,13 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       const data = JSON.parse(event.data);
       console.log('📨 Received WebSocket message:', data);
 
+      if (data.type === 'userList') {
+        console.log('📋 Received updated user list:', data.users);
+        setOnlineUsers(
+          data.users.filter((user) => user !== credentials.username),
+        );
+      }
+
       if (data.type === 'reregister') {
         console.log(`📞 Reregistering request from ${data.from}`);
         console.log('Current userAgent:', userAgentRef.current);
@@ -252,6 +259,25 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       }
     };
   }, [credentials]);
+
+  useEffect(() => {
+    // Set up heartbeat interval
+    const heartbeatInterval = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        console.log('💓 Sending heartbeat');
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'heartbeat',
+            from: credentials.username,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      }
+    }, 60000); // Send heartbeat every minute
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(heartbeatInterval);
+  }, [credentials.username]);
 
   const handleAnswer = () => {
     if (session) {
@@ -307,25 +333,50 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   };
 
   const handleTransfer = async (targetExtension: string) => {
-    if (!userAgent || !userAgent.isConnected()) return;
+    if (!session || !callerNumber) {
+      console.error('Cannot transfer: no active session or caller number');
+      return;
+    }
+
+    console.log(`📞 Transferring call to ${targetExtension}`);
+    setStatus('Transferring call...');
 
     try {
-      const target = UserAgent.makeURI(
-        `sip:${targetExtension}@${credentials.server}`,
-      );
-      if (!target) {
-        throw new Error('Failed to create target URI');
-      }
+      const transferTarget = `sip:${targetExtension}@voip.46elks.com`;
 
-      if (userAgent.session) {
-        await userAgent.session.refer(target);
-        setStatus('Transferring call...');
+      // Set up REFER event handlers before sending the request
+      session.on('refer', (data) => {
+        console.log('Transfer REFER event:', data);
+      });
 
-        setTimeout(() => {
-          setIsInCall(false);
-          setStatus('Call transferred');
-        }, 1000);
-      }
+      const referSubscriber = await session.refer(transferTarget, {
+        extraHeaders: [
+          `Referred-By: <sip:${credentials.username}@voip.46elks.com>`,
+        ],
+      });
+
+      referSubscriber.on('requestSucceeded', () => {
+        console.log('Transfer request accepted');
+      });
+
+      referSubscriber.on('notify', (notification) => {
+        console.log('Transfer status:', notification);
+        const status = notification.status_line.status_code;
+
+        if (status === 200) {
+          setStatus('Transfer successful');
+          // Only terminate our session after transfer is complete
+          session.terminate();
+        } else if (status >= 300) {
+          setStatus('Transfer failed');
+          console.error('Transfer failed with status:', status);
+        }
+      });
+
+      referSubscriber.on('failed', (response) => {
+        console.error('Transfer failed:', response);
+        setStatus('Transfer failed');
+      });
     } catch (error) {
       console.error('Transfer error:', error);
       setStatus('Transfer failed');

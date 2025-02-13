@@ -15,8 +15,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const elksUsername = process.env.REACT_APP_ELKS_USERNAME;
-const elksPassword = process.env.REACT_APP_ELKS_PASSWORD;
+const elksUsername = process.env.ELKS_USERNAME;
+const elksPassword = process.env.ELKS_PASSWORD;
 
 const corsOptions = {
   origin: [
@@ -157,6 +157,41 @@ app.post('/logout', (req, res) => {
   });
 });
 
+app.post('/transfer-call', async (req, res) => {
+  try {
+    const { fromNumber, toNumber } = req.body;
+    const virtualNumber = process.env.ELKS_NUMBER;
+    const authKey = Buffer.from(`${elksUsername}:${elksPassword}`).toString(
+      'base64',
+    );
+
+    const url = 'https://api.46elks.com/a1/calls';
+    const data = new URLSearchParams({
+      from: virtualNumber, // Use virtual number as the caller
+      to: `+${toNumber}`, // Call the transfer target
+      voice_start: JSON.stringify({
+        connect: `+${fromNumber}`, // Connect to the original caller
+        timeout: '45', // Add timeout to ensure connection
+        busy_no_answer: 'busy', // Handle busy/no answer cases
+      }),
+    }).toString();
+
+    const config = {
+      headers: {
+        Authorization: `Basic ${authKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    };
+
+    const response = await axios.post(url, data, config);
+    console.log('Call transfer initiated:', response.data);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error transferring call:', error);
+    res.status(500).json({ error: 'Failed to transfer call' });
+  }
+});
+
 // Create HTTP server
 const server = http.createServer(app);
 
@@ -232,20 +267,35 @@ const broadcastPeriodicReregister = () => {
   logActiveUsers();
 };
 
-// Start periodic reregister (every 30 seconds)
-setInterval(broadcastPeriodicReregister, 10 * 1000);
+// Start periodic reregister (every 3 minutes)
+setInterval(broadcastPeriodicReregister, 3 * 60 * 1000);
 
 wss.on('connection', (ws) => {
   let username = '';
 
+  const broadcastUserList = () => {
+    const userList = Array.from(activeUsers.keys());
+    activeUsers.forEach((clientWs) => {
+      if (clientWs?.readyState === WebSocket.OPEN) {
+        clientWs.send(
+          JSON.stringify({
+            type: 'userList',
+            users: userList,
+          }),
+        );
+      }
+    });
+  };
+
   ws.on('message', (message) => {
     const data = JSON.parse(message.toString());
-    console.log('\n📨 Received WebSocket message:', data); // Log all messages
+    console.log('\n📨 Received WebSocket message:', data);
 
     if (data.type === 'register') {
       username = data.username;
       activeUsers.set(username, ws);
       console.log(`\n👤 WebSocket connected for user: ${username}`);
+      broadcastUserList(); // Broadcast updated user list
       logActiveUsers();
     }
 
@@ -273,6 +323,7 @@ wss.on('connection', (ws) => {
     if (username) {
       activeUsers.delete(username);
       console.log(`\n🚫 User disconnected: ${username}`);
+      broadcastUserList(); // Broadcast updated user list
       logActiveUsers();
     }
   });
