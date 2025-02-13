@@ -169,38 +169,43 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
   useEffect(() => {
     // Connect to WebSocket server using the API_URL from env
-    const wsUrl = window.electron.env.API_URL.replace('http://', 'ws://') // Use wss:// for secure connections
-      .replace('https://', 'wss://'); // Also handle if API_URL starts with https://
+    const wsUrl = window.electron.env.API_URL.replace(
+      'http://',
+      'ws://',
+    ).replace('https://', 'wss://');
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log('WebSocket connected successfully');
+
+      // Send initial register message
       ws.send(
         JSON.stringify({
           type: 'register',
           username: credentials.username,
         }),
       );
+
+      // Send test message
+      ws.send(
+        JSON.stringify({
+          type: 'test',
+          message: 'Hello from client!',
+        }),
+      );
     };
 
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === 'reregister') {
-        console.log(
-          `📞 Reregistering request from ${data.from} (${data.action})`,
-        );
+      console.log('📨 Received WebSocket message:', data); // Log all received messages
 
+      if (data.type === 'reregister') {
+        console.log(`📞 Reregistering request from ${data.from}`);
         // Only reregister if we're not in an active call
         if (userAgent && !isInCall) {
           try {
-            await userAgent.unregister();
-            console.log('Unregistered successfully');
-
-            setTimeout(() => {
-              userAgent.register();
-              console.log('Reregistering...');
-            }, 1000);
+            handleReconnect();
           } catch (error) {
             console.error('Error during reregistration:', error);
           }
@@ -211,7 +216,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     };
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error('❌ WebSocket error:', error);
     };
 
     return () => {

@@ -218,12 +218,16 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (message) => {
     const data = JSON.parse(message.toString());
+    console.log('\n📨 Received WebSocket message:', data); // Log all messages
+
     if (data.type === 'register') {
       username = data.username;
       activeUsers.set(username, ws);
       console.log(`\n👤 WebSocket connected for user: ${username}`);
       logActiveUsers();
     }
+
+    // Add test message handler
   });
 
   ws.on('close', () => {
