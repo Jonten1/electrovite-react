@@ -129,7 +129,18 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             setCallStartTime(null);
             setSession(null);
             window.electron.Notification.close();
-            sendPing();
+
+            // Send reregister request via WebSocket when call ends
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              console.log('📞 Sending reregister request after call end');
+              wsRef.current.send(
+                JSON.stringify({
+                  type: 'reregister',
+                  from: credentials.username,
+                  action: 'call_ended',
+                }),
+              );
+            }
           });
 
           newSession.on('failed', () => {
@@ -140,7 +151,6 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             setCallStartTime(null);
             setSession(null);
             window.electron.Notification.close();
-            sendPing();
           });
 
           newSession.on('accepted', () => {
@@ -191,7 +201,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       ws.send(
         JSON.stringify({
           type: 'test',
-          message: 'Hello from client!',
+          message: 'I am alive!',
         }),
       );
     };
@@ -203,7 +213,9 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       if (data.type === 'reregister') {
         console.log(`📞 Reregistering request from ${data.from}`);
         // Only reregister if we're not in an active call
-        if (userAgent && !isInCall) {
+        console.log(isInCall);
+
+        if (!isInCall) {
           try {
             handleReconnect();
           } catch (error) {
@@ -264,11 +276,9 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   };
 
   const handleReconnect = () => {
-    if (userAgent) {
-      userAgent.stop();
-      userAgent.start();
-      setStatus('Reconnecting...');
-    }
+    userAgent.stop();
+    userAgent.start();
+    setStatus('Reconnecting...');
   };
 
   const handleTransfer = async (targetExtension: string) => {
