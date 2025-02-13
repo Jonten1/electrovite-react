@@ -62,7 +62,15 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       }
     }
   }, [uptime, registeredTime]);
-
+  const sendPing = () => {
+    fetch(window.electron.env.API_URL + '/ping', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username: credentials.username }),
+    });
+  };
   useEffect(() => {
     const initializeSIP = () => {
       try {
@@ -85,13 +93,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         ua.on('registered', () => {
           setStatus('Ready');
           setRegisteredTime(new Date());
-          fetch(window.electron.env.API_URL + '/ping', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ username: credentials.username }),
-          });
+          sendPing();
         });
 
         ua.on('unregistered', () => {
@@ -127,6 +129,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             setCallStartTime(null);
             setSession(null);
             window.electron.Notification.close();
+            sendPing();
           });
 
           newSession.on('failed', () => {
@@ -137,6 +140,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             setCallStartTime(null);
             setSession(null);
             window.electron.Notification.close();
+            sendPing();
           });
 
           newSession.on('accepted', () => {
@@ -165,7 +169,8 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
   useEffect(() => {
     // Connect to WebSocket server using the API_URL from env
-    const wsUrl = window.electron.env.API_URL.replace('http://', 'ws://');
+    const wsUrl = window.electron.env.API_URL.replace('http://', 'ws://') // Use wss:// for secure connections
+      .replace('https://', 'wss://'); // Also handle if API_URL starts with https://
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -182,9 +187,12 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'reregister') {
-        console.log(`📞 Reregistering due to call end from ${data.from}`);
+        console.log(
+          `📞 Reregistering request from ${data.from} (${data.action})`,
+        );
 
-        if (userAgent) {
+        // Only reregister if we're not in an active call
+        if (userAgent && !isInCall) {
           try {
             await userAgent.unregister();
             console.log('Unregistered successfully');
@@ -196,6 +204,8 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           } catch (error) {
             console.error('Error during reregistration:', error);
           }
+        } else {
+          console.log('Skipping reregistration - active call in progress');
         }
       }
     };

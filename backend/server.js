@@ -72,6 +72,7 @@ app.post('/login', async (req, res) => {
 
   if (username && password) {
     req.session.user = { username };
+    notifyUsersOnLogin(username);
     res.json({ success: true });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
@@ -184,10 +185,29 @@ const notifyUsersToReregister = (senderUsername) => {
         JSON.stringify({
           type: 'reregister',
           from: senderUsername,
+          action: 'call_ended',
         }),
       );
       console.log(
-        `📢 Notifying ${user} to reregister (triggered by ${senderUsername})`,
+        `📢 Notifying ${user} to reregister (triggered by ${senderUsername} - call ended)`,
+      );
+    }
+  });
+};
+
+// Add new function for login notifications
+const notifyUsersOnLogin = (username) => {
+  activeUsers.forEach((ws, user) => {
+    if (user !== username && ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'reregister',
+          from: username,
+          action: 'user_login',
+        }),
+      );
+      console.log(
+        `📢 Notifying ${user} to reregister (triggered by ${username} - login)`,
       );
     }
   });
