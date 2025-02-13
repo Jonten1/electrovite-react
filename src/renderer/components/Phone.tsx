@@ -270,14 +270,17 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             type: 'heartbeat',
             from: credentials.username,
             timestamp: new Date().toISOString(),
+            status: isInCall ? 'busy' : 'available',
           }),
         );
-      }
-    }, 60000); // Send heartbeat every minute
 
-    // Cleanup interval on component unmount
+        // Also send HTTP ping as backup
+        sendPing();
+      }
+    }, 30000); // Send heartbeat every 30 seconds
+
     return () => clearInterval(heartbeatInterval);
-  }, [credentials.username]);
+  }, [credentials.username, isInCall]);
 
   const handleAnswer = () => {
     if (session) {
