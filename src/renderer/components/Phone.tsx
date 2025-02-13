@@ -30,6 +30,7 @@ declare global {
 
 const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [userAgent, setUserAgent] = useState<JsSIP.UA | null>(null);
+  const userAgentRef = useRef<JsSIP.UA | null>(null);
   const [session, setSession] = useState<JsSIP.RTCSession | null>(null);
   const [status, setStatus] = useState('Connecting...');
   const [isInCall, setIsInCall] = useState(false);
@@ -89,11 +90,12 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         };
 
         const ua = new JsSIP.UA(configuration);
+        setUserAgent(ua);
+        userAgentRef.current = ua;
 
         ua.on('registered', () => {
           setStatus('Ready');
           setRegisteredTime(new Date());
-          setUserAgent(ua);
           sendPing();
         });
 
@@ -162,18 +164,19 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         });
 
         ua.start();
-        setUserAgent(ua);
+        return ua;
       } catch (error) {
         console.error('SIP initialization error:', error);
         setStatus('Connection failed');
+        return null;
       }
     };
 
-    initializeSIP();
+    const ua = initializeSIP();
 
     return () => {
-      if (userAgent) {
-        userAgent.stop();
+      if (ua) {
+        ua.stop();
       }
     };
   }, [credentials]);
@@ -213,16 +216,16 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
       if (data.type === 'reregister') {
         console.log(`📞 Reregistering request from ${data.from}`);
-        console.log('Current call status:', isInCall);
+        console.log('Current userAgent:', userAgentRef.current);
 
-        if (!isInCall && userAgent) {
+        if (!isInCall && userAgentRef.current) {
           try {
-            await userAgent.unregister();
+            await userAgentRef.current.unregister();
             console.log('Unregistered successfully');
 
             setTimeout(() => {
-              if (userAgent) {
-                userAgent.register();
+              if (userAgentRef.current) {
+                userAgentRef.current.register();
                 console.log('Reregistering...');
               }
             }, 1000);
