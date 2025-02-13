@@ -213,6 +213,28 @@ const notifyUsersOnLogin = (username) => {
   });
 };
 
+// Add periodic reregister function
+const broadcastPeriodicReregister = () => {
+  console.log('\n⏰ Broadcasting periodic reregister request');
+  console.log(activeUsers);
+  activeUsers.forEach((ws, username) => {
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'reregister',
+          from: 'system',
+          action: 'periodic_sync',
+        }),
+      );
+      console.log(`📢 Sending periodic reregister to ${username}`);
+    }
+  });
+  logActiveUsers();
+};
+
+// Start periodic reregister (every 30 seconds)
+setInterval(broadcastPeriodicReregister, 10 * 1000);
+
 wss.on('connection', (ws) => {
   let username = '';
 

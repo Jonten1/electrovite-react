@@ -93,6 +93,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         ua.on('registered', () => {
           setStatus('Ready');
           setRegisteredTime(new Date());
+          setUserAgent(ua);
           sendPing();
         });
 
