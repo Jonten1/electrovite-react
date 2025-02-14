@@ -198,134 +198,112 @@ const server = http.createServer(app);
 // Create WebSocket server
 const wss = new WebSocketServer({ server });
 
-const activeUsers = new Map(); // Store active users and their WebSocket connections
+// Track active WebSocket connections
+const activeUsers = new Map();
 
-// Helper function to log current users
-const logActiveUsers = () => {
+const broadcastUserList = () => {
+  const userList = Array.from(activeUsers.keys());
+  const message = JSON.stringify({
+    type: 'userList',
+    users: userList,
+  });
+
+  activeUsers.forEach((ws) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(message);
+    }
+  });
+
   console.log('\nCurrently connected users:');
-  if (activeUsers.size === 0) {
-    console.log('No users connected');
+  userList.forEach((user) => console.log(`- ${user}`));
+};
+
+const handleHeartbeat = (ws, data) => {
+  const { from, status } = data;
+
+  // Update or create WebSocket connection
+  if (activeUsers.has(from)) {
+    const existingWs = activeUsers.get(from);
+    if (!existingWs || existingWs.readyState !== WebSocket.OPEN) {
+      activeUsers.set(from, ws);
+      console.log(`🔄 Restored WebSocket connection for ${from}`);
+    }
   } else {
-    activeUsers.forEach((_, username) => {
-      console.log(`- ${username}`);
-    });
+    activeUsers.set(from, ws);
+    console.log(`➕ Added new WebSocket connection for ${from}`);
   }
-  console.log(); // Empty line for readability
+
+  // Broadcast updated user list
+  broadcastUserList();
 };
 
-const notifyUsersToReregister = (senderUsername) => {
+const cleanupInactiveUsers = () => {
   activeUsers.forEach((ws, user) => {
-    if (user !== senderUsername && ws?.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: 'reregister',
-          from: senderUsername,
-          action: 'call_ended',
-        }),
-      );
-      console.log(
-        `📢 Notifying ${user} to reregister (triggered by ${senderUsername} - call ended)`,
-      );
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.log(`❌ Removing inactive user: ${user}`);
+      activeUsers.delete(user);
+      broadcastUserList();
     }
   });
 };
 
-// Add new function for login notifications
-const notifyUsersOnLogin = (username) => {
-  activeUsers.forEach((ws, user) => {
-    if (user !== username && ws?.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: 'reregister',
-          from: username,
-          action: 'user_login',
-        }),
-      );
-      console.log(
-        `📢 Notifying ${user} to reregister (triggered by ${username} - login)`,
-      );
-    }
-  });
-};
+// Add cleanup interval
+setInterval(cleanupInactiveUsers, 60000);
 
-// Add periodic reregister function
-const broadcastPeriodicReregister = () => {
-  console.log('\n⏰ Broadcasting periodic reregister request');
-  console.log(activeUsers);
-  activeUsers.forEach((ws, username) => {
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: 'reregister',
-          from: 'system',
-          action: 'periodic_sync',
-        }),
-      );
-      console.log(`📢 Sending periodic reregister to ${username}`);
-    }
-  });
-  logActiveUsers();
-};
-
-// Start periodic reregister (every 3 minutes)
-setInterval(broadcastPeriodicReregister, 3 * 60 * 1000);
-
+// WebSocket server setup
 wss.on('connection', (ws) => {
-  let username = '';
-
-  const broadcastUserList = () => {
-    const userList = Array.from(activeUsers.keys());
-    activeUsers.forEach((clientWs) => {
-      if (clientWs?.readyState === WebSocket.OPEN) {
-        clientWs.send(
-          JSON.stringify({
-            type: 'userList',
-            users: userList,
-          }),
-        );
-      }
-    });
-  };
+  console.log('New WebSocket connection');
 
   ws.on('message', (message) => {
-    const data = JSON.parse(message.toString());
-    console.log('\n📨 Received WebSocket message:', data);
+    try {
+      const data = JSON.parse(message);
+      console.log('\n📨 Received WebSocket message:', data);
 
-    if (data.type === 'register') {
-      username = data.username;
-      activeUsers.set(username, ws);
-      console.log(`\n👤 WebSocket connected for user: ${username}`);
-      broadcastUserList(); // Broadcast updated user list
-      logActiveUsers();
-    }
-
-    if (data.type === 'reregister') {
-      console.log(`\n📞 Reregister request from ${data.from} - ${data.action}`);
-      // Notify all other users to reregister
-      activeUsers.forEach((clientWs, user) => {
-        if (user !== data.from && clientWs?.readyState === WebSocket.OPEN) {
-          clientWs.send(
-            JSON.stringify({
-              type: 'reregister',
-              from: data.from,
-              action: data.action,
-            }),
-          );
+      switch (data.type) {
+        case 'heartbeat':
+          handleHeartbeat(ws, data);
+          break;
+        case 'register':
+          let username = data.username;
+          activeUsers.set(username, ws);
+          console.log(`\n👤 WebSocket connected for user: ${username}`);
+          broadcastUserList(); // Broadcast updated user list
+          break;
+        case 'reregister':
           console.log(
-            `📢 Notifying ${user} to reregister (triggered by ${data.from} - ${data.action})`,
+            `\n📞 Reregister request from ${data.from} - ${data.action}`,
           );
-        }
-      });
+          // Notify all other users to reregister
+          activeUsers.forEach((clientWs, user) => {
+            if (user !== data.from && clientWs?.readyState === WebSocket.OPEN) {
+              clientWs.send(
+                JSON.stringify({
+                  type: 'reregister',
+                  from: data.from,
+                  action: data.action,
+                }),
+              );
+              console.log(
+                `📢 Notifying ${user} to reregister (triggered by ${data.from} - ${data.action})`,
+              );
+            }
+          });
+          break;
+      }
+    } catch (error) {
+      console.error('Error handling WebSocket message:', error);
     }
   });
 
   ws.on('close', () => {
-    if (username) {
-      activeUsers.delete(username);
-      console.log(`\n🚫 User disconnected: ${username}`);
-      broadcastUserList(); // Broadcast updated user list
-      logActiveUsers();
-    }
+    // Find and remove the disconnected user
+    activeUsers.forEach((socket, user) => {
+      if (socket === ws) {
+        console.log(`👋 User disconnected: ${user}`);
+        activeUsers.delete(user);
+        broadcastUserList();
+      }
+    });
   });
 });
 
@@ -344,7 +322,7 @@ app.post('/ping', (req, res) => {
     console.log(`Added user ${username} to active users`);
   }
 
-  logActiveUsers();
+  broadcastUserList();
   res.json({ success: true });
 });
 
@@ -354,6 +332,34 @@ app.post('/call-ended', (req, res) => {
   notifyUsersToReregister(username);
   res.json({ success: true });
 });
+
+const notifyUsersToReregister = (username) => {
+  activeUsers.forEach((ws, user) => {
+    if (user !== username && ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'reregister',
+          from: username,
+          action: 'call-ended',
+        }),
+      );
+    }
+  });
+};
+
+const notifyUsersOnLogin = (username) => {
+  activeUsers.forEach((ws, user) => {
+    if (user !== username && ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'reregister',
+          from: username,
+          action: 'user-login',
+        }),
+      );
+    }
+  });
+};
 
 // Start server
 server.listen(PORT, () => {
