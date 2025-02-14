@@ -132,7 +132,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         userAgent.stop();
       }
     };
-  }, [credentials]);
+  }, [credentials, session]);
 
   const handleCall = async () => {
     if (!number) return;
