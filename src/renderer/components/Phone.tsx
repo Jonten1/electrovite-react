@@ -169,32 +169,6 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     };
   }, [credentials]);
 
-  useEffect(() => {
-    const sendHeartbeat = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/heartbeat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            username: credentials.username,
-          }),
-        });
-
-        const data = await response.json();
-        setOnlineUsers(data.activeUsers);
-      } catch (error) {
-        console.error('Heartbeat error:', error);
-      }
-    };
-
-    const heartbeatInterval = setInterval(sendHeartbeat, 10000);
-    sendHeartbeat();
-
-    return () => clearInterval(heartbeatInterval);
-  }, [credentials]);
-
   const handleCall = async () => {
     if (!number) return;
     try {

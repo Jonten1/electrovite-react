@@ -7,7 +7,6 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { WebSocketServer } from 'ws';
 import http from 'http';
-import session from 'express-session';
 
 dotenv.config();
 
@@ -49,18 +48,6 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-  }),
-);
-
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
   next();
@@ -68,9 +55,7 @@ app.use((req, res, next) => {
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
   if (username && password) {
-    req.session.user = { username };
     res.json({ success: true });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
@@ -78,11 +63,7 @@ app.post('/login', async (req, res) => {
 });
 
 const authenticate = (req, res, next) => {
-  if (req.session.user) {
-    next();
-  } else {
-    res.status(401).json({ error: 'Not authenticated' });
-  }
+  next();
 };
 
 app.get('/numbers', authenticate, async (req, res) => {

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electron', {
   },
   env: {
     USERNAME: process.env.REACT_APP_USERNAME || '',
-    PASSWORD: process.env.REACT_APP_PASSWORD || ''
+    PASSWORD: process.env.REACT_APP_PASSWORD || '',
+    API_URL: process.env.REACT_APP_API_URL || '',
   }
 });
