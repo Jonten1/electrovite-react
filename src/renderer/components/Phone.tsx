@@ -44,31 +44,52 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   useEffect(() => {
     const initializeJsSIP = () => {
       try {
-        // Configure socket for multiple connections
         const socket = new JsSIP.WebSocketInterface(
           `wss://${credentials.server}/w1/websocket`,
         );
+
+        const instanceId = credentials.username.split('@')[0];
+
         const configuration = {
           sockets: [socket],
           uri: `sip:${credentials.username}`,
           password: credentials.password,
           register: true,
-          register_expires: 30,
+          register_expires: 10,
           connection_recovery_min_interval: 2,
           connection_recovery_max_interval: 30,
-          contact_uri: `sip:${
-            credentials.username
-          };transport=ws;instance-id=${Math.random()
-            .toString(36)
-            .substring(2)}`,
+          contact_uri: `sip:${credentials.username};transport=ws;instance-id=${instanceId}`,
           session_timers: false,
+          register_retry_delay: 2,
+          media: {
+            constraints: { audio: true, video: false },
+            iceServers: [{ urls: ['stun:stun.46elks.com:3478'] }],
+            rtcConfiguration: {
+              iceTransportPolicy: 'all',
+              bundlePolicy: 'balanced',
+              rtcpMuxPolicy: 'require',
+              enableDtlsSrtp: true,
+              dtlsRole: 'auto',
+            },
+          },
         };
 
         const ua = new JsSIP.UA(configuration);
 
+        ua.on('registered', () => {
+          console.log('SIP Registration successful');
+          setStatus('Registered');
+        });
+
+        ua.on('registrationFailed', (error) => {
+          console.error('Registration failed:', error);
+          setStatus('Registration failed');
+        });
+
         ua.on('newRTCSession', (data) => {
           const session = data.session;
           setSession(session);
+          console.log('Session:', session);
 
           if (session.direction === 'incoming') {
             const number = session.remote_identity.uri.user;
@@ -112,10 +133,6 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           }
         });
 
-        ua.on('registered', () => setStatus('Registered'));
-        ua.on('unregistered', () => setStatus('Unregistered'));
-        ua.on('registrationFailed', () => setStatus('Registration failed'));
-
         ua.start();
         setUserAgent(ua);
         setStatus('Connecting...');
@@ -132,7 +149,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         userAgent.stop();
       }
     };
-  }, [credentials, session]);
+  }, [credentials]);
 
   const handleCall = async () => {
     if (!number) return;
@@ -298,13 +315,14 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         uri: `sip:${credentials.username}`,
         password: credentials.password,
         register: true,
-        register_expires: 30,
+        register_expires: 300,
         connection_recovery_min_interval: 2,
         connection_recovery_max_interval: 30,
         contact_uri: `sip:${
           credentials.username
         };transport=ws;instance-id=${Math.random().toString(36).substring(2)}`,
         session_timers: false,
+        register_retry_delay: 5,
       });
 
       ua.on('registered', () => setStatus('Registered'));
