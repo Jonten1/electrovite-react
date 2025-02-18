@@ -172,6 +172,16 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log('[WebSocket] Received:', data);
+      if (data.type === 'onlineUsers') {
+        setOnlineUsers(data.users);
+      }
+      if (data.type === 'callStatus') {
+        setStatus(data.status);
+      }
+      if (data.type === 'reregister') {
+        setStatus('Re-registering...');
+        handleReconnect();
+      }
     };
 
     socket.onerror = (error) => {
