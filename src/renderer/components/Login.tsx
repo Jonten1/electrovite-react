@@ -16,6 +16,7 @@ declare global {
         USERNAME: string;
         PASSWORD: string;
         SERVER_URL: string;
+        WS_PROTOCOL: string;
       };
     };
   }

@@ -154,9 +154,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
   useEffect(() => {
     // Check if we're running locally or need to use ngrok
-    const serverUrl = window.electron.env.SERVER_URL;
-    const wsProtocol = serverUrl === 'ngrok:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${serverUrl}/ws`;
+    const wsUrl = `${window.electron.env.WS_PROTOCOL}://${window.electron.env.SERVER_URL}/ws`;
 
     console.log('[WebSocket] Connecting to:', wsUrl);
     const socket = new WebSocket(wsUrl);
