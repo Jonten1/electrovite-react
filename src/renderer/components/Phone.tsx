@@ -153,17 +153,13 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   }, [credentials]);
 
   useEffect(() => {
-    // Determine WebSocket URL based on window location
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = window.location.hostname;
-    const wsPort =
-      window.location.port || (wsProtocol === 'wss:' ? '443' : '80');
-    const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}`;
+    const wsUrl = `ws://localhost:5000/ws`;
+    console.log('[WebSocket] Connecting to:', wsUrl);
 
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-      console.log('WebSocket Connected to:', wsUrl);
+      console.log('[WebSocket] Connected to:', wsUrl);
       socket.send(
         JSON.stringify({
           type: 'login',
@@ -174,21 +170,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log('WebSocket message:', data);
-      if (data.type === 'userLogin') {
-        console.log(`User logged in: ${data.username}`);
-        // Update online users or show notification
-      }
-    };
-
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setStatus('WebSocket Error');
-    };
-
-    socket.onclose = () => {
-      console.log('WebSocket Disconnected');
-      setStatus('WebSocket Disconnected');
+      console.log('[WebSocket] Received:', data);
     };
 
     setWs(socket);

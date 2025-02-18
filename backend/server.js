@@ -160,6 +160,7 @@ const server = http.createServer(app);
 // Create WebSocket server that can handle both ws and wss
 const wss = new WebSocketServer({
   server,
+  path: '/ws', // Add explicit path
   clientTracking: true,
   // Allow connections from ngrok
   verifyClient: (info) => {
@@ -173,20 +174,22 @@ const wss = new WebSocketServer({
 });
 
 // Track connected users with their usernames and call status
-const connectedUsers = new Map(); // username -> { ws, inCall }
+const connectedUsers = new Map();
 
 wss.on('connection', (ws) => {
-  console.log('Client connected to WebSocket');
+  console.log('[WebSocket] New client connected');
 
   ws.on('message', (message) => {
     try {
-      const data = JSON.parse(message);
-      console.log('Received WebSocket message:', data);
+      const data = JSON.parse(message.toString());
+      console.log('[WebSocket] Received message:', data);
 
       if (data.type === 'login') {
-        // Store the new user with call status
         connectedUsers.set(data.username, { ws, inCall: false });
-        console.log('Connected Users:', Array.from(connectedUsers.keys()));
+        console.log(
+          '[WebSocket] Connected Users:',
+          Array.from(connectedUsers.keys()),
+        );
 
         // Notify other users to re-register if they're not in a call
         connectedUsers.forEach((userInfo, username) => {
@@ -215,12 +218,12 @@ wss.on('connection', (ws) => {
         }
       }
     } catch (error) {
-      console.error('WebSocket message error:', error);
+      console.error('[WebSocket] Message error:', error);
     }
   });
 
   ws.on('close', () => {
-    console.log('Client disconnected from WebSocket');
+    console.log('[WebSocket] Client disconnected');
     let disconnectedUser;
     connectedUsers.forEach((userInfo, username) => {
       if (userInfo.ws === ws) {
@@ -254,5 +257,5 @@ const notifyUsersOnLogin = (username) => {
 };
 
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`[Server] Running on port ${PORT}`);
 });
