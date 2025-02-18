@@ -180,7 +180,6 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       }
       if (data.type === 'reregister') {
         setStatus('Re-registering...');
-        handleReconnect();
       }
     };
 
@@ -367,7 +366,11 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       console.error('Mute toggle error:', error);
     }
   };
-
+  useEffect(() => {
+    if (status === 'Re-registering...') {
+      handleReconnect();
+    }
+  }, [status]);
   const handleReconnect = async () => {
     if (isConnecting) return;
 
@@ -377,10 +380,10 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
       if (userAgent) {
         // Unregister first
-        await userAgent.unregister();
+        userAgent.unregister();
 
         // Then register again
-        await userAgent.register();
+        userAgent.register();
 
         setStatus('Re-registration successful');
       } else {
