@@ -40,6 +40,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [session, setSession] = useState<JsSIP.Session | null>(null);
+  const [ws, setWs] = useState<WebSocket | null>(null);
 
   useEffect(() => {
     const initializeJsSIP = () => {
@@ -150,6 +151,72 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       }
     };
   }, [credentials]);
+
+  useEffect(() => {
+    // Determine WebSocket URL based on window location
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.hostname;
+    const wsPort =
+      window.location.port || (wsProtocol === 'wss:' ? '443' : '80');
+    const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}`;
+
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log('WebSocket Connected to:', wsUrl);
+      socket.send(
+        JSON.stringify({
+          type: 'login',
+          username: credentials.username,
+        }),
+      );
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('WebSocket message:', data);
+      if (data.type === 'userLogin') {
+        console.log(`User logged in: ${data.username}`);
+        // Update online users or show notification
+      }
+    };
+
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setStatus('WebSocket Error');
+    };
+
+    socket.onclose = () => {
+      console.log('WebSocket Disconnected');
+      setStatus('WebSocket Disconnected');
+    };
+
+    setWs(socket);
+
+    return () => {
+      if (socket) {
+        socket.close();
+      }
+    };
+  }, [credentials.username]);
+
+  useEffect(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'callStatus',
+          username: credentials.username,
+          inCall: isInCall,
+        }),
+      );
+    }
+  }, [isInCall, ws, credentials.username]);
+
+  const sendWebSocketMessage = (message: any) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+    }
+  };
 
   const handleCall = async () => {
     if (!number) return;
@@ -303,83 +370,23 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
     try {
       setIsConnecting(true);
-      setStatus('Reconnecting...');
+      setStatus('Re-registering...');
 
       if (userAgent) {
-        await userAgent.stop();
-        setUserAgent(null);
+        // Unregister first
+        await userAgent.unregister();
+
+        // Then register again
+        await userAgent.register();
+
+        setStatus('Re-registration successful');
+      } else {
+        // If no userAgent, initialize a new one
+        initializeJsSIP();
       }
-
-      // Re-initialize JsSIP connection
-      const ua = new JsSIP.UA({
-        uri: `sip:${credentials.username}`,
-        password: credentials.password,
-        register: true,
-        register_expires: 300,
-        connection_recovery_min_interval: 2,
-        connection_recovery_max_interval: 30,
-        contact_uri: `sip:${
-          credentials.username
-        };transport=ws;instance-id=${Math.random().toString(36).substring(2)}`,
-        session_timers: false,
-        register_retry_delay: 5,
-      });
-
-      ua.on('registered', () => setStatus('Registered'));
-      ua.on('unregistered', () => setStatus('Unregistered'));
-      ua.on('registrationFailed', () => setStatus('Registration failed'));
-
-      ua.on('newRTCSession', (data) => {
-        const session = data.session;
-
-        if (session.direction === 'incoming') {
-          const number = session.remote_identity.uri.user;
-          setCallerNumber(number);
-          setIsIncoming(true);
-          setIsInCall(true);
-          setStatus(`Incoming call from ${number}`);
-
-          session.on('ended', () => {
-            setIsInCall(false);
-            setIsIncoming(false);
-            setStatus('Ready');
-            setCallStartTime(null);
-          });
-
-          session.on('failed', () => {
-            setIsInCall(false);
-            setIsIncoming(false);
-            setStatus('Ready');
-            setCallStartTime(null);
-            window.electron.Notification.close();
-          });
-
-          session.on('canceled', () => {
-            setIsInCall(false);
-            setIsIncoming(false);
-            setStatus('Ready');
-            setCallStartTime(null);
-            window.electron.Notification.close();
-          });
-
-          session.on('accepted', () => {
-            setIsIncoming(false);
-            setStatus('In call');
-            setCallStartTime(new Date());
-          });
-
-          window.electron.Notification.create('Incoming Call', {
-            body: `From ${number}`,
-          });
-        }
-      });
-
-      ua.start();
-      setUserAgent(ua);
-      setStatus('Connecting...');
     } catch (error) {
-      console.error('Reconnection error:', error);
-      setStatus('Connection failed');
+      console.error('Re-registration error:', error);
+      setStatus('Re-registration failed');
     } finally {
       setIsConnecting(false);
     }

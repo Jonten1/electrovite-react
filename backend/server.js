@@ -5,8 +5,9 @@ import mongoose from 'mongoose';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
+import https from 'https';
 
 dotenv.config();
 
@@ -154,6 +155,104 @@ app.post('/heartbeat', (req, res) => {
   res.json({ activeUsers: activeUsersList });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+const server = http.createServer(app);
+
+// Create WebSocket server that can handle both ws and wss
+const wss = new WebSocketServer({
+  server,
+  clientTracking: true,
+  // Allow connections from ngrok
+  verifyClient: (info) => {
+    const origin = info.origin || '';
+    console.log('Connection attempt from:', origin);
+    // Accept connections from localhost and ngrok
+    return (
+      origin.includes('localhost') || origin.includes('ngrok') || origin === ''
+    ); // Allow connections without origin
+  },
+});
+
+// Track connected users with their usernames and call status
+const connectedUsers = new Map(); // username -> { ws, inCall }
+
+wss.on('connection', (ws) => {
+  console.log('Client connected to WebSocket');
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      console.log('Received WebSocket message:', data);
+
+      if (data.type === 'login') {
+        // Store the new user with call status
+        connectedUsers.set(data.username, { ws, inCall: false });
+        console.log('Connected Users:', Array.from(connectedUsers.keys()));
+
+        // Notify other users to re-register if they're not in a call
+        connectedUsers.forEach((userInfo, username) => {
+          if (
+            username !== data.username &&
+            !userInfo.inCall &&
+            userInfo.ws.readyState === WebSocket.OPEN
+          ) {
+            userInfo.ws.send(
+              JSON.stringify({
+                type: 'reregister',
+                from: data.username,
+                action: 'user-login',
+              }),
+            );
+          }
+        });
+      }
+
+      // Handle call status updates
+      if (data.type === 'callStatus') {
+        const userInfo = connectedUsers.get(data.username);
+        if (userInfo) {
+          userInfo.inCall = data.inCall;
+          connectedUsers.set(data.username, userInfo);
+        }
+      }
+    } catch (error) {
+      console.error('WebSocket message error:', error);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected from WebSocket');
+    let disconnectedUser;
+    connectedUsers.forEach((userInfo, username) => {
+      if (userInfo.ws === ws) {
+        disconnectedUser = username;
+      }
+    });
+
+    if (disconnectedUser) {
+      connectedUsers.delete(disconnectedUser);
+      console.log('User disconnected:', disconnectedUser);
+      console.log(
+        'Remaining connected users:',
+        Array.from(connectedUsers.keys()),
+      );
+    }
+  });
+});
+
+const notifyUsersOnLogin = (username) => {
+  activeUsers.forEach((ws, user) => {
+    if (user !== username && ws?.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'reregister',
+          from: username,
+          action: 'user-login',
+        }),
+      );
+    }
+  });
+};
+
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
