@@ -153,9 +153,15 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   }, [credentials]);
 
   useEffect(() => {
-    const wsUrl = `ws://localhost:5000/ws`;
-    console.log('[WebSocket] Connecting to:', wsUrl);
+    // Check if we're running locally or need to use ngrok
+    const isLocalhost = window.location.hostname === 'localhost';
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = isLocalhost
+      ? 'localhost:5000'
+      : 'preferably-joint-airedale.ngrok-free.app';
+    const wsUrl = `${wsProtocol}//${wsHost}/ws`;
 
+    console.log('[WebSocket] Connecting to:', wsUrl);
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -171,6 +177,11 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log('[WebSocket] Received:', data);
+    };
+
+    socket.onerror = (error) => {
+      console.error('[WebSocket] Error:', error);
+      setStatus('WebSocket Error');
     };
 
     setWs(socket);
@@ -203,14 +214,19 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const handleCall = async () => {
     if (!number) return;
     try {
-      const response = await fetch('http://localhost:5000/make-call', {
+      const isLocalhost = window.location.hostname === 'localhost';
+      const apiHost = isLocalhost
+        ? 'http://localhost:5000'
+        : 'https://preferably-joint-airedale.ngrok-free.app';
+
+      const response = await fetch(`${apiHost}/make-call`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           phoneNumber: number,
-          webrtcNumber: credentials.username.split('@')[0], // This gets the '4600120060' part
+          webrtcNumber: credentials.username.split('@')[0],
         }),
       });
 
