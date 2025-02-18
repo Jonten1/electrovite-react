@@ -15,6 +15,7 @@ declare global {
       env: {
         USERNAME: string;
         PASSWORD: string;
+        SERVER_URL: string;
       };
     };
   }

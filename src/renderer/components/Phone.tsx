@@ -154,12 +154,9 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
   useEffect(() => {
     // Check if we're running locally or need to use ngrok
-    const isLocalhost = window.location.hostname === 'localhost';
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = isLocalhost
-      ? 'localhost:5000'
-      : 'preferably-joint-airedale.ngrok-free.app';
-    const wsUrl = `${wsProtocol}//${wsHost}/ws`;
+    const serverUrl = window.electron.env.SERVER_URL;
+    const wsProtocol = serverUrl === 'ngrok:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${serverUrl}/ws`;
 
     console.log('[WebSocket] Connecting to:', wsUrl);
     const socket = new WebSocket(wsUrl);
