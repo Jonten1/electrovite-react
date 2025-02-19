@@ -365,10 +365,10 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     }
   };
   useEffect(() => {
-    if (status === 'Re-registering...') {
+    if (status === 'Re-registering...' || isInCall) {
       handleReconnect();
     }
-  }, [status]);
+  }, [status, isInCall]);
   const handleReconnect = async () => {
     if (isConnecting) return;
 
