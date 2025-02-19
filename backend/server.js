@@ -168,6 +168,22 @@ const wss = new WebSocketServer({
 // Track connected users with their usernames and call status
 const connectedUsers = new Map();
 
+// Add this function to broadcast online users
+const broadcastOnlineUsers = () => {
+  const onlineUsersList = Array.from(connectedUsers.keys());
+
+  connectedUsers.forEach((userInfo) => {
+    if (userInfo.ws.readyState === WebSocket.OPEN) {
+      userInfo.ws.send(
+        JSON.stringify({
+          type: 'onlineUsers',
+          users: onlineUsersList,
+        }),
+      );
+    }
+  });
+};
+
 wss.on('connection', (ws) => {
   console.log('[WebSocket] New client connected');
 
@@ -199,6 +215,7 @@ wss.on('connection', (ws) => {
             );
           }
         });
+        broadcastOnlineUsers();
       }
 
       // Handle call status updates
@@ -231,6 +248,8 @@ wss.on('connection', (ws) => {
         Array.from(connectedUsers.keys()),
       );
     }
+    // Broadcast updated online users list
+    broadcastOnlineUsers();
   });
 });
 

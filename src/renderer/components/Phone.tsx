@@ -19,6 +19,7 @@ declare global {
     electron: {
       Notification: {
         create: (title: string, options: NotificationOptions) => Notification;
+        close: () => void;
       };
       focusWindow: () => void;
       SIP: {
@@ -94,42 +95,37 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
 
           if (session.direction === 'incoming') {
             const number = session.remote_identity.uri.user;
-            setCallerNumber(number);
-            setIsIncoming(true);
-            setIsInCall(true);
-            setStatus(`Incoming call from ${number}`);
-            console.log('Incoming call from:', number);
-            console.log(isInCall, isIncoming);
 
-            session.on('ended', () => {
-              setIsInCall(false);
-              setIsIncoming(false);
-              setStatus('Ready');
+            // Set all incoming call states together
+            const setIncomingCallState = (isActive: boolean) => {
+              setCallerNumber(isActive ? number : '');
+              setIsIncoming(isActive);
+              setIsInCall(isActive);
+              setStatus(isActive ? `Incoming call from ${number}` : 'Ready');
               setCallStartTime(null);
-            });
 
-            session.on('failed', () => {
-              setIsInCall(false);
-              setIsIncoming(false);
-              setStatus('Ready');
-              setCallStartTime(null);
-              window.electron.Notification.close();
-            });
+              // Close notification when call is no longer active
+              if (!isActive) {
+                window.electron.Notification.close();
+              }
+            };
 
-            session.on('canceled', () => {
-              setIsInCall(false);
-              setIsIncoming(false);
-              setStatus('Ready');
-              setCallStartTime(null);
-              window.electron.Notification.close();
-            });
+            // Initial incoming call state
+            setIncomingCallState(true);
+
+            // Set up all session event handlers
+            session.on('ended', () => setIncomingCallState(false));
+            session.on('failed', () => setIncomingCallState(false));
+            session.on('canceled', () => setIncomingCallState(false));
 
             session.on('accepted', () => {
               setIsIncoming(false);
               setStatus('In call');
               setCallStartTime(new Date());
+              window.electron.Notification.close(); // Close notification when call is accepted
             });
 
+            // Show notification
             window.electron.Notification.create('Incoming Call', {
               body: `From ${number}`,
             });
