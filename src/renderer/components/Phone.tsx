@@ -98,6 +98,8 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             setIsIncoming(true);
             setIsInCall(true);
             setStatus(`Incoming call from ${number}`);
+            console.log('Incoming call from:', number);
+            console.log(isInCall, isIncoming);
 
             session.on('ended', () => {
               setIsInCall(false);
@@ -397,7 +399,15 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
       setIsConnecting(false);
     }
   };
-
+  // reregister every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isInCall) {
+        handleReconnect();
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [status]);
   return (
     <div className='app-container'>
       <OnlineUsers
