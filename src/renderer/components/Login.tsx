@@ -14,6 +14,7 @@ declare global {
   interface Window {
     electron: {
       env: {
+        API_TRANSFER_PROTOCOL: any;
         ELKS_NUMBER: string;
         USERNAME: string;
         PASSWORD: string;

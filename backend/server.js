@@ -142,6 +142,61 @@ app.post('/make-call', async (req, res) => {
   }
 });
 
+app.post('/transfer-call', async (req, res) => {
+  try {
+    const { phoneNumber, webrtcNumber, targetExtension } = req.body;
+    const callId = `${webrtcNumber}-${targetExtension}-${Date.now()}`;
+    const virtualNumber = process.env.ELKS_NUMBER;
+
+    if (!elksUsername || !elksPassword || !virtualNumber) {
+      throw new Error('46elks credentials not configured');
+    }
+
+    const authKey = Buffer.from(`${elksUsername}:${elksPassword}`).toString(
+      'base64',
+    );
+
+    // Store the call information
+    activeCalls.set(callId, {
+      status: 'pending',
+      webrtcNumber: targetExtension,
+      phoneNumber,
+      timestamp: Date.now(),
+    });
+
+    const calls = {
+      from: virtualNumber,
+      to: phoneNumber, // Keep the existing caller connected
+      voice_start: JSON.stringify({
+        connect: `+${targetExtension}`, // Connect to the transfer target
+        callerid: virtualNumber,
+      }),
+    };
+
+    const data = new URLSearchParams(calls).toString();
+
+    const response = await axios.post('https://api.46elks.com/a1/calls', data, {
+      headers: {
+        Authorization: `Basic ${authKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeout: 10000,
+    });
+
+    console.log('Transfer initiated:', response.data);
+    res.json({ ...response.data, callId });
+  } catch (error) {
+    console.error(
+      'Error transferring call:',
+      error.response?.data || error.message,
+    );
+    res.status(500).json({
+      error: 'Failed to transfer call',
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {

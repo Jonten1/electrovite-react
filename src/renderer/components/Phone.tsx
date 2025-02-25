@@ -386,60 +386,50 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         return;
       }
 
-      const transferTarget = `sip:${targetExtension}@voip.46elks.com`;
-      console.log('Transfer target:', transferTarget);
+      const response = await fetch(
+        `${window.electron.env.API_TRANSFER_PROTOCOL}://${window.electron.env.SERVER_URL}/transfer-call`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            phoneNumber: callerNumber,
+            webrtcNumber: credentials.username.split('@')[0],
+            targetExtension: targetExtension,
+          }),
+        },
+      );
 
-      // Set up REFER event handlers before sending the request
-      session.on('refer', (data) => {
-        console.log('Transfer REFER event:', data);
-      });
+      if (!response.ok) {
+        throw new Error('Failed to initiate transfer');
+      }
 
-      const referSubscriber = await session.refer(transferTarget, {
-        extraHeaders: [`Referred-By: <sip:${credentials.username}>`],
-        replaces: session, // Add this to ensure proper call replacement
-      });
+      const transferData = await response.json();
+      console.log('Transfer initiated:', transferData);
 
-      let transferTimeout = setTimeout(() => {
-        setStatus('Transfer timed out');
-        referSubscriber.terminate();
-      }, 10000); // 10 second timeout
+      // Set up WebSocket handler for transfer status
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'callStatus',
+            status: 'transfer_initiated',
+            callId: transferData.callId,
+          }),
+        );
+      }
 
-      referSubscriber.on('requestSucceeded', () => {
-        console.log('Transfer request accepted');
-        setStatus('Transfer request accepted');
-      });
-
-      referSubscriber.on('notify', (notification) => {
-        console.log('Transfer status:', notification);
-        const status = notification.status_line.status_code;
-
-        clearTimeout(transferTimeout);
-
-        if (status === 200) {
-          setStatus('Transfer successful');
-          session.terminate();
-          setIsInCall(false);
-          setCallStartTime(null);
-        } else if (status >= 300) {
-          setStatus(`Transfer failed (${status})`);
-          console.error('Transfer failed with status:', status);
-          // Don't terminate the session on failure
-        }
-      });
-
-      referSubscriber.on('failed', (response) => {
-        clearTimeout(transferTimeout);
-        console.error('Transfer failed:', response);
-        setStatus('Transfer failed - maintaining current call');
-
-        // Notify the user that transfer failed but call is maintained
-        showNotification('Transfer Failed', {
-          body: 'The transfer could not be completed. Your call is still connected.',
-        });
-      });
+      // End the current call once transfer is initiated
+      session.terminate();
+      setIsInCall(false);
+      setStatus('Call transferred');
+      setCallStartTime(null);
     } catch (error) {
       console.error('Transfer error:', error);
       setStatus('Transfer failed - maintaining current call');
+      showNotification('Transfer Failed', {
+        body: 'The transfer could not be completed. Your call is still connected.',
+      });
     }
   };
 
