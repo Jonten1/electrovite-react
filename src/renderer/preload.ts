@@ -20,5 +20,6 @@ contextBridge.exposeInMainWorld('electron', {
     API_URL: process.env.REACT_APP_API_URL || '',
     SERVER_URL: process.env.REACT_APP_SERVER_URL || '',
     WS_PROTOCOL: process.env.REACT_APP_WS_PROTOCOL || '',
-  }
+    ELKS_NUMBER: process.env.REACT_APP_ELKS_NUMBER || '',
+  },
 });

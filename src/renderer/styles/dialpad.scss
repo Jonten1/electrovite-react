@@ -1,0 +1,96 @@
+.dialpad-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.number-display {
+  position: relative;
+  width: 100%;
+
+  input {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.5rem;
+    text-align: center;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+
+    &:focus {
+      outline: none;
+      border-color: #4a90e2;
+    }
+  }
+
+  .clear-button {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 5px;
+
+    &:hover {
+      color: #475569;
+    }
+  }
+}
+
+.dialpad {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  .dialpad-row {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+
+    button {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: none;
+      background: #f8fafc;
+      font-size: 1.5rem;
+      color: #1e293b;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+      &:hover {
+        background: #e2e8f0;
+        transform: translateY(-2px);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+
+      &.call-button {
+        background: #22c55e;
+        color: white;
+
+        &:hover {
+          background: #16a34a;
+        }
+      }
+
+      &.delete-button {
+        background: #64748b;
+        color: white;
+
+        &:hover {
+          background: #475569;
+        }
+      }
+    }
+  }
+}

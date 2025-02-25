@@ -8,14 +8,17 @@ import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 import https from 'https';
+import { time } from 'console';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const elksUsername = process.env.REACT_APP_ELKS_USERNAME;
-const elksPassword = process.env.REACT_APP_ELKS_PASSWORD;
+const elksUsername =
+  process.env.ELKS_USERNAME || process.env.REACT_APP_ELKS_USERNAME;
+const elksPassword =
+  process.env.ELKS_PASSWORD || process.env.REACT_APP_ELKS_PASSWORD;
 
 const corsOptions = {
   origin: [
@@ -82,40 +85,60 @@ app.get('/numbers', authenticate, async (req, res) => {
   }
 });
 
+const activeCalls = new Map();
+
 app.post('/make-call', async (req, res) => {
   try {
     const { phoneNumber, webrtcNumber } = req.body;
+    const callId = `${webrtcNumber}-${phoneNumber}-${Date.now()}`;
     const virtualNumber = process.env.ELKS_NUMBER;
-    console.log('elksUsername', elksUsername);
-    console.log('elksPassword', elksPassword);
+
+    if (!elksUsername || !elksPassword || !virtualNumber) {
+      throw new Error('46elks credentials not configured');
+    }
 
     const authKey = Buffer.from(`${elksUsername}:${elksPassword}`).toString(
       'base64',
     );
-    const url = 'https://api.46elks.com/a1/calls';
 
-    // First call the WebRTC number, then connect to the target number
-    const data = new URLSearchParams({
+    // Store the call information
+    activeCalls.set(callId, {
+      status: 'pending',
+      webrtcNumber,
+      phoneNumber,
+      timestamp: Date.now(),
+    });
+
+    const calls = {
       from: virtualNumber,
-      to: `+${webrtcNumber}`, // Call our WebRTC client first
+      to: phoneNumber, // Call the target number first
       voice_start: JSON.stringify({
-        connect: `+${phoneNumber}`, // Then connect to the target number
+        connect: `+${webrtcNumber}`, // Then connect to WebRTC client
+        callerid: virtualNumber,
       }),
-    }).toString();
+    };
 
-    const config = {
+    const data = new URLSearchParams(calls).toString();
+
+    const response = await axios.post('https://api.46elks.com/a1/calls', data, {
       headers: {
         Authorization: `Basic ${authKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-    };
+      timeout: 10000,
+    });
 
-    const response = await axios.post(url, data, config);
     console.log('Outgoing call initiated:', response.data);
-    res.json(response.data);
+    res.json({ ...response.data, callId });
   } catch (error) {
-    console.error('Error making outgoing call:', error);
-    res.status(500).json({ error: 'Failed to make call' });
+    console.error(
+      'Error making outgoing call:',
+      error.response?.data || error.message,
+    );
+    res.status(500).json({
+      error: 'Failed to make call',
+      details: error.response?.data || error.message,
+    });
   }
 });
 
@@ -266,6 +289,30 @@ const notifyUsersOnLogin = (username) => {
     }
   });
 };
+
+app.post('/call-status', (req, res) => {
+  const { callId, status } = req.body;
+  if (activeCalls.has(callId)) {
+    const call = activeCalls.get(callId);
+    call.status = status;
+
+    // Notify the caller through WebSocket
+    const userInfo = connectedUsers.get(`${call.webrtcNumber}@voip.46elks.com`);
+    if (userInfo && userInfo.ws.readyState === WebSocket.OPEN) {
+      userInfo.ws.send(
+        JSON.stringify({
+          type: 'callStatus',
+          status,
+          callId,
+        }),
+      );
+    }
+
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'Call not found' });
+  }
+});
 
 server.listen(PORT, () => {
   console.log(`[Server] Running on port ${PORT}`);

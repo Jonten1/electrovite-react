@@ -71,3 +71,24 @@
     transform: rotate(360deg);
   }
 }
+
+.status-indicator {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  margin-right: 8px;
+  display: inline-block;
+
+  &.online {
+    background-color: #44b700;
+  }
+
+  &.offline {
+    background-color: #888;
+  }
+}
+
+.status-section {
+  display: flex;
+  align-items: center;
+}

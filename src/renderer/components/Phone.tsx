@@ -4,12 +4,14 @@ import '../styles/phone.scss';
 import CallInfo from './CallInfo';
 import OnlineUsers from './OnlineUsers';
 import StatusBar from './StatusBar';
+import Dialpad from './Dialpad';
 
 interface PhoneProps {
   credentials: {
     username: string;
     password: string;
     server: string;
+    virtualNumber?: string;
   };
   onLogout: () => void;
 }
@@ -17,8 +19,8 @@ interface PhoneProps {
 declare global {
   interface Window {
     electron: {
-      Notification: {
-        create: (title: string, options: NotificationOptions) => Notification;
+      notification: {
+        create: (title: string, options: notificationOptions) => notification;
         close: () => void;
       };
       focusWindow: () => void;
@@ -28,6 +30,37 @@ declare global {
     };
   }
 }
+
+const showNotification = (title: string, options = {}) => {
+  try {
+    if (window.electron?.notification?.create) {
+      window.electron.notification.create(title, options);
+    } else {
+      // Fallback to browser notifications if electron isn't available
+      if (Notification.permission === 'granted') {
+        new Notification(title, options);
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') {
+            new Notification(title, options);
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to show notification:', error);
+  }
+};
+
+const closeNotification = () => {
+  try {
+    if (window.electron?.notification?.close) {
+      window.electron.notification.close();
+    }
+  } catch (error) {
+    console.warn('Failed to close notification:', error);
+  }
+};
 
 const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const [userAgent, setUserAgent] = useState<JsSIP.UA | null>(null);
@@ -92,41 +125,60 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           const session = data.session;
           setSession(session);
           console.log('Session:', session);
+          console.log('Remote identity:', session.remote_identity.uri.user);
+          console.log('Virtual number:', window.electron.env.ELKS_NUMBER);
 
-          if (session.direction === 'incoming') {
-            const number = session.remote_identity.uri.user;
+          // Common session event handlers
+          session.on('failed', (response) => {
+            console.log('Session failed:', response);
+            setIsInCall(false);
+            setStatus('Call failed');
+            setCallStartTime(null);
+            setCallerNumber('');
+            setIsIncoming(false);
+          });
 
-            // Set all incoming call states together
-            const setIncomingCallState = (isActive: boolean) => {
-              setCallerNumber(isActive ? number : '');
-              setIsIncoming(isActive);
-              setIsInCall(isActive);
-              setStatus(isActive ? `Incoming call from ${number}` : 'Ready');
-              setCallStartTime(null);
+          session.on('ended', () => {
+            console.log('Session ended');
+            setIsInCall(false);
+            setStatus('Call ended');
+            setCallStartTime(null);
+            setCallerNumber('');
+            setIsIncoming(false);
+          });
 
-              // Close notification when call is no longer active
-              if (!isActive) {
-                window.electron.Notification.close();
-              }
-            };
+          session.on('confirmed', () => {
+            console.log('Session confirmed');
+            setStatus('In call');
+            setCallStartTime(new Date());
+          });
 
-            // Initial incoming call state
-            setIncomingCallState(true);
-
-            // Set up all session event handlers
-            session.on('ended', () => setIncomingCallState(false));
-            session.on('failed', () => setIncomingCallState(false));
-            session.on('canceled', () => setIncomingCallState(false));
-
-            session.on('accepted', () => {
-              setIsIncoming(false);
-              setStatus('In call');
-              setCallStartTime(new Date());
-              window.electron.Notification.close(); // Close notification when call is accepted
+          // Check if session is from our virtual number (outgoing call)
+          if (
+            session.direction === 'incoming' &&
+            session.remote_identity.uri.user === window.electron.env.ELKS_NUMBER
+          ) {
+            console.log('Matching virtual number check:');
+            console.log('Remote identity:', session.remote_identity.uri.user);
+            console.log(
+              'Virtual number (stripped):',
+              credentials.virtualNumber?.replace('+', ''),
+            );
+            console.log('Auto-answering incoming leg of outgoing call');
+            setIsInCall(true);
+            setCallerNumber(session.remote_identity.uri.user);
+            session.answer({
+              mediaConstraints: { audio: true, video: false },
             });
-
-            // Show notification
-            window.electron.Notification.create('Incoming Call', {
+          }
+          // For actual incoming calls
+          else if (session.direction === 'incoming') {
+            const number = session.remote_identity.uri.user;
+            setCallerNumber(number);
+            setIsIncoming(true);
+            setIsInCall(true);
+            setStatus(`Incoming call from ${number}`);
+            showNotification('Incoming Call', {
               body: `From ${number}`,
             });
           }
@@ -174,7 +226,16 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         setOnlineUsers(data.users);
       }
       if (data.type === 'callStatus') {
-        setStatus(data.status);
+        if (data.status === 'rejected') {
+          setStatus(`Call rejected: ${data.reason}`);
+          setIsInCall(false);
+          setCallerNumber('');
+          if (session) {
+            session.terminate();
+          }
+        } else {
+          setStatus(data.status);
+        }
       }
       if (data.type === 'reregister') {
         setStatus('Re-registering...');
@@ -213,13 +274,15 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
     }
   };
 
-  const handleCall = async () => {
-    if (!number) return;
+  const handleCall = async (phoneNumber: string) => {
+    if (!phoneNumber) return;
     try {
       const isLocalhost = window.location.hostname === 'localhost';
       const apiHost = isLocalhost
         ? 'http://localhost:5000'
         : 'https://preferably-joint-airedale.ngrok-free.app';
+
+      setStatus('Initiating call...');
 
       const response = await fetch(`${apiHost}/make-call`, {
         method: 'POST',
@@ -227,7 +290,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phoneNumber: number,
+          phoneNumber: phoneNumber,
           webrtcNumber: credentials.username.split('@')[0],
         }),
       });
@@ -236,12 +299,28 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         throw new Error('Failed to initiate call');
       }
 
+      const callData = await response.json();
+      console.log('Call initiated:', callData);
+
+      // Set up WebSocket handler for call status
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'callStatus',
+            status: 'initiated',
+            callId: callData.callId,
+          }),
+        );
+      }
+
+      setCallerNumber(phoneNumber);
       setIsInCall(true);
-      setStatus('Calling...');
-      setCallStartTime(new Date());
+      setStatus('Waiting for connection...');
     } catch (error) {
       console.error('Call error:', error);
       setStatus('Call failed');
+      setIsInCall(false);
+      setCallerNumber('');
     }
   };
 
@@ -266,7 +345,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
           mediaConstraints: { audio: true, video: false },
         };
         session.answer(options);
-        window.electron.Notification.close();
+        closeNotification();
         setIsIncoming(false);
         setStatus('In call');
         setCallStartTime(new Date());
@@ -358,7 +437,7 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
         setStatus('Transfer failed - maintaining current call');
 
         // Notify the user that transfer failed but call is maintained
-        window.electron.Notification.create('Transfer Failed', {
+        showNotification('Transfer Failed', {
           body: 'The transfer could not be completed. Your call is still connected.',
         });
       });
@@ -467,10 +546,9 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
             onEndCall={handleHangup}
           />
         ) : (
-          <div className='ready-state'>
-            <div>
-              <p>Ready to receive calls</p>
-              <div className='status'>{status}</div>
+          <div className='phone-container'>
+            <div className='phone-content'>
+              <Dialpad onCall={handleCall} />
             </div>
           </div>
         )}

@@ -6,6 +6,7 @@ interface LoginProps {
     username: string;
     password: string;
     server: string;
+    virtualNumber: any;
   }) => void;
 }
 
@@ -13,6 +14,7 @@ declare global {
   interface Window {
     electron: {
       env: {
+        ELKS_NUMBER: string;
         USERNAME: string;
         PASSWORD: string;
         SERVER_URL: string;
@@ -29,10 +31,12 @@ const Login = ({ onLogin }: LoginProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Virtual number from env:', window.electron.env.ELKS_NUMBER);
     onLogin({
       username: username + '@voip.46elks.com',
       password,
       server,
+      virtualNumber: window.electron.env.ELKS_NUMBER,
     });
   };
 
