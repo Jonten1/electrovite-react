@@ -277,23 +277,19 @@ const Phone = ({ credentials, onLogout }: PhoneProps) => {
   const handleCall = async (phoneNumber: string) => {
     if (!phoneNumber) return;
     try {
-      const isLocalhost = window.location.hostname === 'localhost';
-      const apiHost = isLocalhost
-        ? 'http://localhost:5000'
-        : 'https://preferably-joint-airedale.ngrok-free.app';
-
-      setStatus('Initiating call...');
-
-      const response = await fetch(`${apiHost}/make-call`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `${window.electron.env.API_TRANSFER_PROTOCOL}://${window.electron.env.SERVER_URL}/make-call`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            phoneNumber: phoneNumber,
+            webrtcNumber: credentials.username.split('@')[0],
+          }),
         },
-        body: JSON.stringify({
-          phoneNumber: phoneNumber,
-          webrtcNumber: credentials.username.split('@')[0],
-        }),
-      });
+      );
 
       if (!response.ok) {
         throw new Error('Failed to initiate call');
